@@ -17,8 +17,7 @@ from model.losses.uw_loss import *
 def data_preprocess(dataset_name: str, in_path: Path, out_path: Path, zfill_num: int = 3, suffix: str = 'png') -> None:
     if dataset_name == 'isbi2012':
         __prepare_data_isbi2012(in_path, out_path, zfill_num, suffix)
-    
-    
+
     
 def __prepare_data_isbi2012(in_path: Path, out_path: Path, zfill_num: int = 3, imgs_suffix: str = 'png') -> None:
     """
@@ -45,28 +44,28 @@ def __prepare_data_isbi2012(in_path: Path, out_path: Path, zfill_num: int = 3, i
         idx += 1
         files_name.append(str(idx).zfill(zfill_num) + '.' + imgs_suffix)
         io.imsave(str(Path(imgs_outpath, str(idx).zfill(zfill_num) + '.' + imgs_suffix)), img)
-        np.save(str(Path(labels_outpath, str(idx).zfill(zfill_num) + '.npy')), (label/255)) # cell is 1 and border is 0
+        np.save(str(Path(labels_outpath, str(idx).zfill(zfill_num) + '.npy')), (label/255))  # cell is 1 and border is 0
         if idx == 0:
             plt.figure(figsize=(10, 10))
-            plt.subplot(1,2,1), plt.imshow(img, cmap='gray'),   plt.title('image'), plt.axis("off")
-            plt.subplot(1,2,2), plt.imshow(label, cmap='gray'), plt.title('label'), plt.axis("off")
+            plt.subplot(1, 2, 1), plt.imshow(img,   cmap='gray'), plt.title('image'), plt.axis("off")
+            plt.subplot(1, 2, 2), plt.imshow(label, cmap='gray'), plt.title('label'), plt.axis("off")
             plt.show()            
     print("File Convert Done!")
 
 
-def prepare_weight_map(labels_path: Path, out_path: Path, func_names: List, class_num :int = 2) -> None:
+def prepare_weight_map(labels_path: Path, out_path: Path, func_names: List, class_num: int = 2) -> None:
     """
         Generate the weight map in data directory, such as balanced class weight or unet weight
     """
     file_paths = []
     for file in labels_path.rglob("*.npy"):
-        if Path.is_file(file) and '.ipynb_checkpoints' not in str(str(file)):
+        if Path.is_file(file) and ".ipynb_checkpoints" not in str(str(file)):
             file_paths.append(file)
     file_paths.sort()
     # init
     bcw_weight = BalancedClassWeight(class_num)
-    uw_weight  = UnetWeight()
-    print("Weight Map Caculating...")
+    uw_weight = UnetWeight()
+    print("Weight Map Calculation...")
     for file_path in file_paths:
         file_name = file_path.name
         print("Analysing {} ..." .format(file_name))
@@ -74,20 +73,21 @@ def prepare_weight_map(labels_path: Path, out_path: Path, func_names: List, clas
         for func_name in func_names:
             weight_path = Path(out_path, func_name)
             weight_path.mkdir(parents=True, exist_ok=True)
+            weight = np.zeros((label.shape[0], label.shape[1], class_num))
             if func_name == 'bcw':
-                weight = bcw_weight._get_weight(label)
+                weight = bcw_weight.get_weight(label)
             elif func_name == 'uw':
                 assert class_num == 2, "The unet weight only support binary segmentation"
-                weight = uw_weight._get_weight(label)
+                weight = uw_weight.get_weight(label)
             print("{} for {} has done".format(func_name, file_name))
             print("Visualization:")
             for vis_idx in range(class_num):
                 print("{} {}, the max value is {} and the min value is {}".format(func_name, vis_idx, 
                                                                                   np.amax(weight[:, :, vis_idx]),
                                                                                   np.amin(weight[:, :, vis_idx])))
-                    # print('    and the unique values are {}'.format(np.unique(weight[:, :, vis_idx])))
+                # print('    and the unique values are {}'.format(np.unique(weight[:, :, vis_idx])))
             plt.figure(figsize=(10, 10))
-            plt.subplot(1,class_num + 1,1), plt.imshow(label, cmap="gray"), plt.title("label"), plt.axis("off")
+            plt.subplot(1, class_num + 1, 1), plt.imshow(label, cmap="gray"), plt.title("label"), plt.axis("off")
             for vis_idx in range(class_num):
                 plt.subplot(1,class_num + 1,vis_idx + 2) 
                 plt.imshow(weight[:, :, vis_idx]), plt.title("{} {}".format(func_name, vis_idx)), plt.axis("off")

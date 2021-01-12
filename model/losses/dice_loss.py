@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import numpy as np
 from torch import Tensor, einsum
 
+
 def make_one_hot(input, num_classes):
     """Convert class index tensor to one hot encoding tensor.
     Args:
@@ -94,8 +95,9 @@ class DiceLoss(nn.Module):
                 total_loss += dice_loss
 
         return total_loss/target.shape[1]
-    
-class GeneralizedDice():
+
+
+class GeneralizedDice:
 
     def forward(self, probs: Tensor, target: Tensor, _: Tensor) -> Tensor:
 

@@ -1,8 +1,8 @@
 # The framework of image segmentation based on deep learning
 
-This reprository is aimming to build a framework of image segmentation based on deep learning. You can easily add your own data, augmentation method, network, loss function, metric and tta method during network training.
+This repository is aiming to build a framework of image segmentation based on deep learning. You can easily add your own data, augmentation method, network, loss function, metric and tta method during network training.
 
-For example, we provide a demo with neuro segementation task in [ISBI2012 challange](http://brainiac2.mit.edu/isbi_challenge/).
+For example, we provide a demo with neural segmentation task in [ISBI2012 challange](http://brainiac2.mit.edu/isbi_challenge/).
 
 ## Main points
 
@@ -14,7 +14,7 @@ class Losser: Control the loss function during training, you can easily add your
 
 class NetInference: Control the inference (test) process, including test time augmentation, overlap tile strategy and post processing
 
-class OverlapTile: Control the overlaptile strategy during inference, please check the unet's paper
+class OverlapTile: Control the overlap-tile strategy during inference, please check the unet's paper
 
 class TestTimeAug: Control the tta methods during inference, you can easily add your own method in this class.
 

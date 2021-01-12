@@ -2,7 +2,7 @@ import math
 import numpy as np
 from skimage import metrics
 from skimage.measure import label
-import gala.evaluate as ev
+# import gala.evaluate as ev
 from typing import Tuple
 
 # 我们将图像分割指标分成5个类别：

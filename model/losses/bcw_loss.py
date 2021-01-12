@@ -1,17 +1,17 @@
 import numpy as np
 
 
-class BalancedClassWeight():
+class BalancedClassWeight:
     """
-    Balanced Class Weight
-    If ratio of classes of image is [n1:n2:n3...:nm], m is class number, and the min ratio is 1
-    So the weight is [r_sum - n1, r_sum - n2, r_sum - n3, ..., r_sum - nm]
-    where r_sum = n1 + n2 + ... +nm
+        Balanced Class Weight
+        If ratio of classes of image is [n1:n2:n3...:nm], m is class number, and the min ratio is 1
+        So the weight is [r_sum - n1, r_sum - n2, r_sum - n3, ..., r_sum - nm]
+        where r_sum = n1 + n2 + ... +nm
     """
-    def __init__(self, class_num:int = 2) -> None:
+    def __init__(self, class_num: int = 2) -> None:
         self._class_num = class_num
     
-    def _get_weight(self, label:np.ndarray) -> np.ndarray:
+    def get_weight(self, label: np.ndarray) -> np.ndarray:
         weight = np.zeros((label.shape[0], label.shape[1], self._class_num))
         class_weight = np.zeros((self._class_num, 1))
         for idx in range(self._class_num):

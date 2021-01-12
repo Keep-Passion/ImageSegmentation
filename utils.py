@@ -7,6 +7,7 @@ from libtiff import TIFF
 from pathlib import Path
 from skimage import io
 from torch import Tensor
+import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.transforms as tr
 import matplotlib.pyplot as plt
@@ -58,13 +59,13 @@ def load_img(img_path: Path) -> np.ndarray:
         Load images or npy files, you can add your own type of file in here
     """
     if img_path.suffix == '.npy':
-        img = np.load(img_path)
+        img = np.load(str(img_path))
     else:
         img = io.imread(str(img_path))
     return img
 
 
-class Logger():
+class Logger:
     """
         Log and print the information during experiment
     """
@@ -111,7 +112,8 @@ def check_result(epoch, img, label, output, weight, checkpoint_path, logger, des
     plt.show()
 
 
-def plot(epoch, train_value_list, val_value_list, checkpoint_path, find_min_value = True, curve_name = "loss", ignore_epoch: int = 2) -> None:
+def plot(epoch, train_value_list, val_value_list, checkpoint_path, find_min_value=True, curve_name="loss",
+         ignore_epoch: int = 2) -> None:
     """
         Plot training cure during training, and draw target epoch in the figure
     """
@@ -130,8 +132,8 @@ def plot(epoch, train_value_list, val_value_list, checkpoint_path, find_min_valu
     plt.plot(train_value_list, color="r", label="train " + curve_name)
     plt.plot(val_value_list,   color="b", label="val "  + curve_name)
     if len(val_value_list) > ignore_epoch:
-        plt.axvline(x = val_value_list.index(target_value), ls='-',c='green')
-        plt.legend(loc = 'best')
+        plt.axvline(x=val_value_list.index(target_value), ls='-', c='green')
+        plt.legend(loc='best')
     plt.savefig(str(Path(checkpoint_path,  curve_name + '_curve.png')))
     plt.show()
 
@@ -149,7 +151,7 @@ def is_sset(a: Tensor, sub: Iterable) -> bool:
     return uniq(a).issubset(sub)
 
 
-class GpuDetector():
+class GpuDetector:
     """
         Gpu detector to address the problems related to the gpu.
     """
@@ -168,7 +170,7 @@ class GpuDetector():
                 break
         # Todo: the multi-gpus inference
     
-    def set_gpu_device(self, gpu_idx: int) -> Tuple:
+    def set_gpu_device(self, gpu_idx: int):
         """
             Setting certain gpu advice to use
         """
@@ -200,13 +202,14 @@ class GpuDetector():
         # however this can be handle in RuntimeError in inference
 
 
-class NetInference():
+class NetInference:
     """
         Net Inference for 2D image segmentation
     """
-    def __init__(self, gpu_detector, input_size:int=512, overlap_size:int=32, batch_size:int=1, 
-                 aug_type:int=0, mean:float=0.9410404628082503, std:float=0.12481161024777744, 
-                 model = UNet, in_channel: int = 1, out_channel:int = 2, pth_address:str=None, use_post_process:bool=True):
+    def __init__(self, gpu_detector, input_size: int = 512, overlap_size: int = 32, batch_size: int = 1,
+                 aug_type: int = 0, mean: float = 0.9410404628082503, std: float = 0.12481161024777744,
+                 model = UNet, in_channel: int = 1, out_channel: int = 2,
+                 pth_address: Path = None, use_post_process: bool = True):
         # overlap-tile parameters
         self._input_size = input_size
         self._overlap_size = overlap_size
@@ -222,7 +225,7 @@ class NetInference():
         self._z_score_norm = tr.Compose([
             tr.ToTensor(),
             tr.Normalize(mean = [self._mean], 
-                         std =  [self._std])
+                         std  = [self._std])
         ])
         self._use_post_process = use_post_process
         
@@ -281,7 +284,7 @@ class NetInference():
                     gpu_status, gpu_idx_in_use =  self._gpu_detector.get_current_gpu()
                     if gpu_status:
                         in_tensor = in_tensor.cuda(gpu_idx_in_use)                
-                    out_tensor = self._model.forward(in_tensor) # b,c,w,h c=2
+                    out_tensor = self._model.forward(in_tensor)  # b,c,w,h c=2
                     out_tensor = F.softmax(out_tensor, dim = 1)
                     if gpu_status:
                         out_tensor = out_tensor.cpu()
@@ -369,14 +372,15 @@ class NetInference():
         self._std = std
 
 
-class OverlapTile():
+class OverlapTile:
     """
-        This stategy is implementated from: Ma B, Ban X, Huang H, et al. Deep learning-based image segmentation for al-la alloy microscopic images[J]. Symmetry, 2018, 10(4): 107.
+        This stategy is implementated from: Ma B, Ban X, Huang H, et al. Deep learning-based image segmentation
+        for al-la alloy microscopic images[J]. Symmetry, 2018, 10(4): 107.
         For figure 4
         crop_size is the size of blue rectangle, which is equal to input_size
         roi_size is the size of yellow rectangle
     """
-    def __init__(self, crop_size:int=256, overlap_size:int=32):
+    def __init__(self, crop_size: int = 256, overlap_size: int = 32):
         self._crop_size = crop_size
         self._overlap_size = overlap_size
         self._roi_size = crop_size - 2 * overlap_size
@@ -391,8 +395,8 @@ class OverlapTile():
         # Pad image before cropping
         in_pad_img = np.pad(in_img, self._overlap_size, mode='symmetric')
         # calculate the number of cropping, which consider the influence of remainder
-        h_pad_num = math.ceil(in_pad_img.shape[0] / (self._roi_size))
-        w_pad_num = math.ceil(in_pad_img.shape[1] / (self._roi_size))
+        h_pad_num = math.ceil(in_pad_img.shape[0] / self._roi_size)
+        w_pad_num = math.ceil(in_pad_img.shape[1] / self._roi_size)
         # if in_pad_img.shape[0] % (self._roi_size) == 0:h_pad_num = h_pad_num - 1
         # if in_pad_img.shape[1] % (self._roi_size) == 0:w_pad_num = w_pad_num - 1
         in_crop_imgs = []
@@ -411,7 +415,8 @@ class OverlapTile():
                     end_w = in_pad_img.shape[1]
                 
                 crop_img = in_pad_img[start_h: end_h, start_w: end_w]
-                # print("cropping: i={}, start_h={}, start_w={}, j={}, end_h={}, end_w={}, crop_shape={}".format(i, start_h, start_w, j, end_h, end_w, crop_img.shape))
+                # print("cropping: i={}, start_h={}, start_w={}, j={}, end_h={}, end_w={}, crop_shape={}"\
+                # .format(i, start_h, start_w, j, end_h, end_w, crop_img.shape))
                 in_crop_imgs.append(crop_img)
                 if end_w == in_pad_img.shape[1]:
                     break
@@ -443,12 +448,13 @@ class OverlapTile():
             if end_w > self._in_img_shape[1]:
                 start_w = self._in_img_shape[1] - self._roi_size
                 end_w = self._in_img_shape[1]    
-            # print("stitching: i={}, start_h={}, start_w={}, j={}, end_h={}, end_w={}".format(i, start_h, start_w, j, end_h, end_w))    
+            # print("stitching: i={}, start_h={}, start_w={}, j={}, end_h={}, end_w={}"\
+            # .format(i, start_h, start_w, j, end_h, end_w))
             out_img[start_h: end_h, start_w: end_w] = roi_img
         return out_img
 
 
-class TestTimeAug():
+class TestTimeAug:
     """
         Test Time Augmentation, you can add your own function in this class
     """
@@ -500,4 +506,3 @@ class TestTimeAug():
                 out_imgs.append(sum_imgs / tta_num)
                 idx = idx + tta_num
         return out_imgs
-    

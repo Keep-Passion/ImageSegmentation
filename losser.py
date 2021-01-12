@@ -5,7 +5,7 @@ from torch import Tensor
 from model.losses.dice_loss import DiceLoss
 
 
-class Losser():
+class Losser:
     """
         Loss class for network training, you can add your loss in here
     """
@@ -17,7 +17,7 @@ class Losser():
         if loss_name in ['bcw', 'uw']:
             loss = self.wm_criterion.forward(output, label, weight)
         if loss_name == 'dice':
-            label_one_hot = torch.stack([label == c for c in range(2)], dim = 1).squeeze().type(torch.int32).type(torch.float)
+            label_one_hot = torch.stack([label == c for c in range(2)], dim=1).squeeze().type(torch.int32).type(torch.float)
             loss = self.dice_criterion.forward(output.squeeze(), label_one_hot)
         return loss
 
