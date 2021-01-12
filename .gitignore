@@ -127,3 +127,9 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# data experiment
+data/isbi2012/data_experiment/
+
+# pycharm
+.idea
