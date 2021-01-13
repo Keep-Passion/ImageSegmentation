@@ -380,15 +380,16 @@ class OverlapTile:
         crop_size is the size of blue rectangle, which is equal to input_size
         roi_size is the size of yellow rectangle
     """
+
     def __init__(self, crop_size: int = 256, overlap_size: int = 32):
         self._crop_size = crop_size
         self._overlap_size = overlap_size
         self._roi_size = crop_size - 2 * overlap_size
         self._in_img_shape = None
-    
+
     def crop(self, in_img: np.ndarray) -> List:
         """
-            Crop in_img to sub-img List, 
+            Crop in_img to sub-img List,
             hint: self._roi_size is used in crop and stitch stage, please check the paper careful when read this code
         """
         self._in_img_shape = in_img.shape
@@ -401,54 +402,62 @@ class OverlapTile:
         # if in_pad_img.shape[1] % (self._roi_size) == 0:w_pad_num = w_pad_num - 1
         in_crop_imgs = []
         for i in range(h_pad_num):
+            # row analysis
+            # overlap_crop, it is need to calculate the start of cropping
+            start_h = i * self._roi_size
+            end_h = start_h + self._crop_size
+
+            # if there is some remainder result for cropping, change start_h and start_w
+            if end_h > in_pad_img.shape[0]:
+                start_h = in_pad_img.shape[0] - self._crop_size
+                end_h = in_pad_img.shape[0]
+
             for j in range(w_pad_num):
-                # overlap_crop, it is need to calculate the start of cropping
-                start_h = i * self._roi_size; end_h = start_h + self._crop_size 
-                start_w = j * self._roi_size; end_w = start_w + self._crop_size
-                
-                # if there is some remainder result for cropping, change start_h and start_w
-                if end_h > in_pad_img.shape[0]:
-                    start_h = in_pad_img.shape[0] - self._crop_size
-                    end_h = in_pad_img.shape[0]
+                # column analysis
+                start_w = j * self._roi_size
+                end_w = start_w + self._crop_size
+
                 if end_w > in_pad_img.shape[1]:
                     start_w = in_pad_img.shape[1] - self._crop_size
                     end_w = in_pad_img.shape[1]
-                
+
                 crop_img = in_pad_img[start_h: end_h, start_w: end_w]
-                # print("cropping: i={}, start_h={}, start_w={}, j={}, end_h={}, end_w={}, crop_shape={}"\
-                # .format(i, start_h, start_w, j, end_h, end_w, crop_img.shape))
+                # print("cropping: i={}, start_h={}, start_w={}, j={}, end_h={}, end_w={}, crop_shape={}".\
+                #      format(i, start_h, start_w, j, end_h, end_w, crop_img.shape))
                 in_crop_imgs.append(crop_img)
                 if end_w == in_pad_img.shape[1]:
                     break
             if end_h == in_pad_img.shape[0]:
                 break
         return in_crop_imgs
-    
+
     def stitch(self, out_crop_imgs: List) -> np.ndarray:
         """
             Stitch sub-img List to whole out img
         """
         out_img = np.zeros(self._in_img_shape)
-        
+
         # calculate the number of cropping, which consider the influence of remainder
-        h_num = math.ceil(self._in_img_shape[0] / self._roi_size)
+        # h_num = math.ceil(self._in_img_shape[0] / self._roi_size) # it is no need to use that
         w_num = math.ceil(self._in_img_shape[1] / self._roi_size)
-        
+
         for img_idx, out_crop_img in enumerate(out_crop_imgs):
-            roi_img = out_crop_img[self._overlap_size: self._overlap_size + self._roi_size, 
-                                   self._overlap_size: self._overlap_size + self._roi_size]
+            roi_img = out_crop_img[self._overlap_size: self._overlap_size + self._roi_size,
+                      self._overlap_size: self._overlap_size + self._roi_size]
             i = int(img_idx / w_num)
             j = int(img_idx - (i * w_num))
-            start_h = int(i * self._roi_size); end_h = start_h + self._roi_size
-            start_w = int(j * self._roi_size); end_w = start_w + self._roi_size
-            
+            start_h = int(i * self._roi_size);
+            end_h = start_h + self._roi_size
+            start_w = int(j * self._roi_size);
+            end_w = start_w + self._roi_size
+
             if end_h > self._in_img_shape[0]:
                 start_h = self._in_img_shape[0] - self._roi_size
                 end_h = self._in_img_shape[0]
             if end_w > self._in_img_shape[1]:
                 start_w = self._in_img_shape[1] - self._roi_size
-                end_w = self._in_img_shape[1]    
-            # print("stitching: i={}, start_h={}, start_w={}, j={}, end_h={}, end_w={}"\
+                end_w = self._in_img_shape[1]
+                # print("stitching: i={}, start_h={}, start_w={}, j={}, end_h={}, end_w={}"\
             # .format(i, start_h, start_w, j, end_h, end_w))
             out_img[start_h: end_h, start_w: end_w] = roi_img
         return out_img
@@ -459,9 +468,9 @@ class TestTimeAug:
         Test Time Augmentation, you can add your own function in this class
     """
     def __init__(self, aug_type: int = 0):
-        self._aug_type = aug_type # 0: no tta; 1: 4 variant(rotation), 2: eight variant(rotation and flip)
+        self._aug_type = aug_type   # 0: no tta; 1: 4 variant(rotation), 2: eight variant(rotation and flip)
     
-    def aug_input(self, in_imgs:List) -> List:
+    def aug_input(self, in_imgs: List) -> List:
         """
             Aug sub-imgs List and return a new List
         """
@@ -469,15 +478,15 @@ class TestTimeAug:
         for in_img in in_imgs:
             if self._aug_type >= 0:    
                 in_aug_imgs.append(in_img.copy())
-            if self._aug_type >= 1: # rotation 4 variants for one input
+            if self._aug_type >= 1:                            # rotation 4 variants for one input
                 in_aug_imgs.append(np.rot90(in_img, 1).copy()) # if there is no copy, it will introduce error in network inference
                 in_aug_imgs.append(np.rot90(in_img, 2).copy())
                 in_aug_imgs.append(np.rot90(in_img, 3).copy())
-            if self._aug_type >= 2: # rotation and flip 8 variants for one input
-                in_aug_imgs.append(np.flipud(in_img).copy()) # upper and down flip
-                in_aug_imgs.append(np.fliplr(in_img).copy()) # left and right flip
-                in_aug_imgs.append(np.flipud(np.rot90(in_img, 3)).copy()) # upper and down flip for 270 rotation
-                in_aug_imgs.append(np.fliplr(np.rot90(in_img, 3)).copy()) # left and right flip for 270 rotation
+            if self._aug_type >= 2:                            # rotation and flip 8 variants for one input
+                in_aug_imgs.append(np.flipud(in_img).copy())   # upper and down flip
+                in_aug_imgs.append(np.fliplr(in_img).copy())   # left and right flip
+                in_aug_imgs.append(np.flipud(np.rot90(in_img, 3)).copy())  # upper and down flip for 270 rotation
+                in_aug_imgs.append(np.fliplr(np.rot90(in_img, 3)).copy())  # left and right flip for 270 rotation
         return in_aug_imgs
                 
     def merge_out(self, out_aug_imgs: List) -> List:

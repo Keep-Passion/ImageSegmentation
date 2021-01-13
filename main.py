@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 from IPython.display import clear_output
 import matplotlib.pyplot as plt
+
 import cv2, time
 import random
 import skimage
@@ -68,13 +69,13 @@ class SegTrainer:
         self.use_kfold = False
         self.kf_num = 5
         self.val_rate = 0.1
-        self.val_metric_name = "dice"  # 'loss', 'dice', 'vi'
+        self.val_metric_name = "loss"  # 'loss', 'dice', 'vi'
         self.is_min_val_metirc = self.__check_min_val_metric()
 
-        self.batch_size = 2
-        self.crop_size = 256
+        self.batch_size = 10  # at least 2
+        self.crop_size = 256  # 128,256,512
         self.learning_rate = 1e-4
-        self.epochs = 50
+        self.epochs = 50  # 10
 
         self.use_augment = [True, True, True]  # In training, rand_rotation, rand_vertical_flip, rand_horizontal_flip
         self.no_augment = [False, False, False]  # In Validate and test
@@ -171,11 +172,11 @@ class SegTrainer:
         logger.log_print("Experiment: {}".format(experiment_name))
 
         # K-fold Cross Validation
+        # files_name = [‘001.png’, ...]
         for kf_idx, (train_files, test_files) in enumerate(kf.split(self.files_name)):
             # Dataset split
             # we use k-fold cv to produce train set and test set, and then sample some data (10%)
             # from train set as val set (sampling without replacement)
-            random.seed(self.seed_num)
 
             val_files = random.sample(list(train_files), int(len(train_files) * self.val_rate) + 1)
             train_files = list(set(train_files).difference(set(val_files)))
@@ -194,9 +195,6 @@ class SegTrainer:
                 temp_parameters_path = global_parameters_path
                 if kf_idx >= 1:
                     break
-
-            # train setting
-            setup_seed(self.seed_num)
 
             train_dataset = SegDataset(self.data_experiment_path, train_files, self.weights_path,
                                        use_augment=self.use_augment, crop_size=self.crop_size, depth=None,
@@ -255,6 +253,7 @@ class SegTrainer:
             logger.log_print("The best epoch is at: {} th epoch".format(val_best_epoch))
             logger.log_print("Train {} list is: {}".format(self.val_metric_name, train_metric_list))
             logger.log_print("Val   {} list is: {}".format(self.val_metric_name, val_metric_list))
+
             self.best_model_path = Path(temp_parameters_path, "best_model_state.pth")
 
             test_vis_path = Path(temp_parameters_path, "test_vis")
@@ -262,7 +261,7 @@ class SegTrainer:
             test_metrics.append(
                 self.test(self.imgs_path, self.labels_path, test_files, self.best_model_path, test_vis_path))
             logger.log_print("test_metrics is {}".format(test_metrics))
-
+        logger.log_print("Experiment is {}".format(experiment_name))
         logger.log_print("Metric is {} in test time".format(self.test_metric_name))
         if self.use_kfold:
             logger.log_print(
@@ -272,7 +271,7 @@ class SegTrainer:
 
     def __train(self, dataloader):
         self.model.train()
-        for sample in dataloader:
+        for sample in dataloader:  # 2D [B, C, H, W]
             if torch.cuda.is_available():
                 img, label = sample['img'].cuda(), sample['label'].cuda()
                 if self.weights_path is not None:

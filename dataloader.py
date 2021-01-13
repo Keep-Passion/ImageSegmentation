@@ -89,13 +89,12 @@ class SegDataset(Dataset):
     def __len__(self) -> int:
         return len(self._img_path)
 
-
     
-class DataAugmentor():
+class DataAugmentor:
     """
         The class of data augmentor, you can add your own function in this class
     """  
-    def __init__(self, crop_size = None, use_augment = [False, False, False], depth = None) -> None:
+    def __init__(self, crop_size:int = None, use_augment: List = [False, False, False], depth = None) -> None:
         self.__crop_size   = crop_size
         self.__use_augment = use_augment
         self.__depth = depth
