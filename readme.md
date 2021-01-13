@@ -4,6 +4,8 @@ This repository is aiming to build a framework of image segmentation based on de
 
 For example, we provide a demo with neural segmentation task in [ISBI2012 challange](http://brainiac2.mit.edu/isbi_challenge/).
 
+![avatar](/appendix/network.png)
+
 ## Main points
 
 class SegTrainer: Control the whole processing of training, validation and inference.
@@ -26,4 +28,20 @@ Beside, we provide many designs in the code, such as cross validation, training 
 
 ## Requirement
 All code are based on python36.  
-Gala is installed according to https://github.com/janelia-flyem/gala.  
+Gala is installed according to https://github.com/janelia-flyem/gala. 
+
+## Some explanation
+### Weight map loss function
+We can change the weight of specific pixel to change its importance during training process. In general, balanced class weight (bcw) is a classical weight map to solve class-imbalance problem.
+And in this code, we provide bcw and unet's weight (uw).
+
+![avatar](/appendix/loss_result.png)
+
+### Overlap-tile strategy
+To save the gpu assumption during inference, we can not feed whole image into network. So we must crop local image to analysis. Because of padding operation, simple crop strategy will cause
+artifacts on the border. In this code, we provide an overlap-tile strategy, by feeding the network with local image in blue rectangle and only using result in yellow rectangle. 
+
+![avatar](/appendix/overlap-tile.png)
+
+The visualization of simple crop strategy and overlap-tile strategy is shown below:
+![avatar](/appendix/overlaptile_result.png)

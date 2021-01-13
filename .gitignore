@@ -133,3 +133,5 @@ data/isbi2012/data_experiment/
 
 # pycharm
 .idea
+
+*.pptx
