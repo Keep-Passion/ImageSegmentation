@@ -45,7 +45,7 @@ def count_mean_and_std(img_dir: Path, img_suffix: str) -> Tuple: # (mean, std, n
     
     for img_path in imgs_path:
         num += 1
-        img = io.imread(str(img_path), 0) * 1.0 / 255
+        img = io.imread(str(img_path), 0) * 1.0 / 255   # 进行归一化
         assert np.max(np.unique(img)) <= 1, "The img value should lower than 1 when calculate mean and std"
         mean += np.mean(img)
         std += np.std(img)

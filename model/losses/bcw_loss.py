@@ -12,14 +12,14 @@ class BalancedClassWeight:
         self._class_num = class_num
     
     def get_weight(self, label: np.ndarray) -> np.ndarray:
-        weight = np.zeros((label.shape[0], label.shape[1], self._class_num))
+        weight = np.zeros((label.shape[0], label.shape[1], self._class_num)) # shape[0]个shape[1] * num的矩阵
         class_weight = np.zeros((self._class_num, 1))
         for idx in range(self._class_num):
             idx_num = np.count_nonzero(label == idx)
             class_weight[idx, 0] = idx_num
         min_num = np.amin(class_weight)
-        class_weight = class_weight * 1.0 / min_num
+        class_weight = class_weight * 1.0 / min_num   # 这步和下面这步是根据上面Balanced Class Weight的算法算的，只不过ratio这里不为1，所以分母不为1
         class_weight = np.sum(class_weight) - class_weight
         for idx in range(self._class_num):
-            weight[:, :, idx][label == idx] = class_weight[idx, 0]
+            weight[:, :, idx][label == idx] = class_weight[idx, 0] # TODO:最后构成权重矩阵
         return weight

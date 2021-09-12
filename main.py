@@ -119,7 +119,7 @@ class SegTrainer:
 
     def data_preprocess(self, data_bk_path: Path, data_experiment_path: Path) -> None:
         print("Data Preprocess ... ")
-        data_preprocess(self.dataset_name, data_bk_path, data_experiment_path, zfill_num=self.zfill_num,
+        data_preprocess(self.dataset_name, data_bk_path, data_experiment_path, zfill_num=self.zfill_num,         # 将位图转换成对应的image图和label图
                         suffix=self.imgs_suffix)  # you can change this
         print('Generating data in {}'.format(str(data_experiment_path)))
 
@@ -137,7 +137,7 @@ class SegTrainer:
         # Calculate weight map
         # Balanced Class Weight, bcw, Unet Weight, uw
         weights_func = ["bcw", "uw"]
-        prepare_weight_map(self.labels_path, data_experiment_path, weights_func, self.labels_class)
+        prepare_weight_map(self.labels_path, data_experiment_path, weights_func, self.labels_class)   # TODO:这一步没太懂做什么的，为什么会有彩色图像出来
         print("Generated weight map in {}".format(str(data_experiment_path)))
 
         print("Data Preprocess has done")
@@ -180,9 +180,9 @@ class SegTrainer:
 
             val_files = random.sample(list(train_files), int(len(train_files) * self.val_rate) + 1)
             train_files = list(set(train_files).difference(set(val_files)))
-            train_files.sort();
+            train_files.sort()
             val_files.sort()
-
+            # 分成训练集、验证集、测试集
             train_files = [self.files_name[item] for item in train_files]
             val_files = [self.files_name[item] for item in val_files]
             test_files = [self.files_name[item] for item in test_files]
@@ -193,7 +193,7 @@ class SegTrainer:
                 logger.log_print("Cross Validation: {}".format(str(self.kf_num) + '_fold_' + str(kf_idx)))
             else:
                 temp_parameters_path = global_parameters_path
-                if kf_idx >= 1:
+                if kf_idx >= 1:   # TODO:这里大于等于1为什么要退出
                     break
 
             train_dataset = SegDataset(self.data_experiment_path, train_files, self.weights_path,
@@ -238,7 +238,7 @@ class SegTrainer:
                     "Epoch {}: train_{} {:.4f}; val_{} {:.4f} \n".format(i, self.val_metric_name, train_metric_list[-1],
                                                                          self.val_metric_name, val_metric_list[-1]))
 
-                plot(i, train_metric_list, val_metric_list, temp_parameters_path, self.is_min_val_metirc,
+                plot(i, train_metric_list, val_metric_list, temp_parameters_path, self.is_min_val_metirc,  # TODO
                      curve_name=self.val_metric_name, ignore_epoch=self.ignore_epoch_num)
 
                 if (i > self.ignore_epoch_num) and ((self.is_min_val_metirc and val_metric < val_baseline) or (
@@ -285,7 +285,7 @@ class SegTrainer:
 
             self.optimizer.zero_grad()
             loss.backward()
-            # 梯度裁剪
+            # 梯度裁剪，防止梯度爆炸
             nn.utils.clip_grad_norm_(self.model.parameters(), 5)
             self.optimizer.step()
         self.scheduler.step()

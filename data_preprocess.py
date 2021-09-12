@@ -18,7 +18,7 @@ def data_preprocess(dataset_name: str, in_path: Path, out_path: Path, zfill_num:
     if dataset_name == "isbi2012":
         __prepare_data_isbi2012(in_path, out_path, zfill_num, suffix)
 
-    
+# 由位图转换成image和label
 def __prepare_data_isbi2012(in_path: Path, out_path: Path, zfill_num: int = 3, imgs_suffix: str = 'png') -> None:
     """
         Prepare the data for training
@@ -35,18 +35,18 @@ def __prepare_data_isbi2012(in_path: Path, out_path: Path, zfill_num: int = 3, i
     imgs_outpath.mkdir(parents=True, exist_ok=True) 
     labels_outpath.mkdir(parents=True, exist_ok=True)
     print("File Converting...")
-    print("The image's path is {}".format(str(imgs_outpath  )))
+    print("The image's path is {}".format(str(imgs_outpath)))
     print("The label's path is {}".format(str(labels_outpath)))
 
     idx = -1
     for img, label in zip( list(imgs_tif.iter_images()),  list(labels_tif.iter_images()) ):
         idx += 1
-        io.imsave(str(Path(imgs_outpath, str(idx).zfill(zfill_num) + '.' + imgs_suffix)), img)
+        io.imsave(str(Path(imgs_outpath, str(idx).zfill(zfill_num) + '.' + imgs_suffix)), img)  # img 是 512 * 512的图片，灰度值为0~255，zfill(zfill_num)是产生多少位的数字
         np.save(str(Path(labels_outpath, str(idx).zfill(zfill_num) + ".npy")), (label/255))  # cell is 1 and border is 0
         if idx == 0:
             plt.figure(figsize=(10, 10))
             plt.subplot(1, 2, 1), plt.imshow(img,   cmap="gray"), plt.title("image"), plt.axis("off")
-            plt.subplot(1, 2, 2), plt.imshow(label, cmap="gray"), plt.title("label"), plt.axis("off")
+            plt.subplot(1, 2, 2), plt.imshow(label, cmap="gray"), plt.title("label"), plt.axis("off")   # label中只有0或者255两个值
             plt.show()            
     print("File Convert Done!")
 
@@ -87,8 +87,9 @@ def prepare_weight_map(labels_path: Path, out_path: Path, func_names: List, clas
             plt.figure(figsize=(10, 10))
             plt.subplot(1, class_num + 1, 1), plt.imshow(label, cmap="gray"), plt.title("label"), plt.axis("off")
             for vis_idx in range(class_num):
-                plt.subplot(1, class_num + 1, vis_idx + 2)
+                plt.subplot(1, class_num + 1, vis_idx + 2) # 行数、列数、图片标号
+                weight[:,:,vis_idx][0][1] = 3
                 plt.imshow(weight[:, :, vis_idx]), plt.title("{} {}".format(func_name, vis_idx)), plt.axis("off")
             plt.show()
             # print(str(Path(weight_path, file_name.replace('png', 'npy'))))
-            np.save(str(Path(weight_path, file_name.replace("png", "npy"))), weight)
+            np.save(str(Path(weight_path, file_name.replace("png", "npy"))), weight) # TODO:这样做的作用是什么
