@@ -29,7 +29,7 @@ from data_preprocess import *
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
-
+# 训练器
 class SegTrainer:
     """
         Segmentation class
@@ -54,9 +54,9 @@ class SegTrainer:
         self.files_name = None
 
         self.imgs_num = 30
-        self.imgs_mean = 0.49475772084753505
-        self.imgs_std = 0.16781602590161787
-        self.z_score_norm = tr.Compose([
+        self.imgs_mean = 0.49475772084753505    # 在进行目标检测或者分割的时候，需要对图像进行mean的预处理操作
+        self.imgs_std = 0.16781602590161787     # 标准差 Standard Deviation
+        self.z_score_norm = tr.Compose([        # 数据归一化
             tr.ToTensor(),
             tr.Normalize(mean=[self.imgs_mean],
                          std=[self.imgs_std])
@@ -66,9 +66,9 @@ class SegTrainer:
 
         # training parameters
         self.seed_num = 2020
-        self.use_kfold = False
+        self.use_kfold = False  # 交叉验证
         self.kf_num = 5
-        self.val_rate = 0.1
+        self.val_rate = 0.1     # TODO:
         self.val_metric_name = "loss"  # 'loss', 'dice', 'vi'
         self.is_min_val_metirc = self.__check_min_val_metric()
 
@@ -77,6 +77,7 @@ class SegTrainer:
         self.learning_rate = 1e-4
         self.epochs = 50  # 10
 
+        # 数据增强
         self.use_augment = [True, True, True]  # In training, rand_rotation, rand_vertical_flip, rand_horizontal_flip
         self.no_augment = [False, False, False]  # In Validate and test
 
@@ -104,21 +105,24 @@ class SegTrainer:
         self.test_use_post_process = False  # whether or not use post processing in test time
         self.test_metric_name = "dice"  # metirc for test data, "dice" or "vi"
 
+    # 检查用哪种检测模型
     def __check_model(self):
         models_name_list = ["unet", "resunet", "attunet", "nestedunet"]
         models_class_list = [UNet, ResUNet, AttUNet, NestedUNet]
+        # 断言:assert condition,相当于if not,如果condition不成立，就弹出异常
         assert self.model_name in models_name_list, "{} is not support in this code".format(self.model_name)
         model_class = models_class_list[models_name_list.index(self.model_name)]
         return model_class
 
     def __check_min_val_metric(self) -> bool:
-        if self.val_metric_name in ["loss", "vi"]:
+        if self.val_metric_name in ["loss", "vi"]:  # TODO:vi是啥
             return True
         else:
             return False
 
     def data_preprocess(self, data_bk_path: Path, data_experiment_path: Path) -> None:
         print("Data Preprocess ... ")
+
         data_preprocess(self.dataset_name, data_bk_path, data_experiment_path, zfill_num=self.zfill_num,         # 将位图转换成对应的image图和label图
                         suffix=self.imgs_suffix)  # you can change this
         print('Generating data in {}'.format(str(data_experiment_path)))
@@ -134,7 +138,7 @@ class SegTrainer:
                          std=[self.imgs_std])
         ])
 
-        # Calculate weight map
+        # Calculate weight map    # TODO:这里没有太理解
         # Balanced Class Weight, bcw, Unet Weight, uw
         weights_func = ["bcw", "uw"]
         prepare_weight_map(self.labels_path, data_experiment_path, weights_func, self.labels_class)   # TODO:这一步没太懂做什么的，为什么会有彩色图像出来
@@ -142,13 +146,14 @@ class SegTrainer:
 
         print("Data Preprocess has done")
 
+    # 函数参数的写法，提醒该参数应该传什么样的值
     def start_training(self, data_bk_path: Path, data_experiment_path: Path, experiment_path: Path,
                        use_preprocess: bool = False) -> None:
 
         self.data_experiment_path = data_experiment_path
-        self.imgs_path = Path(data_experiment_path, "images")
+        self.imgs_path = Path(data_experiment_path, "images")   # 可以获取data_experiment_path下的images目录
         self.labels_path = Path(data_experiment_path, "labels")
-        if self.loss_name in ["bcw", "uw"]:
+        if self.loss_name in ["bcw", "uw"]: # bcw:类别平衡权重、uw:unet 网络的权重
             self.weights_path = Path(data_experiment_path, self.loss_name)
         else:
             self.weights_path = Path(data_experiment_path, "bcw")
@@ -224,7 +229,7 @@ class SegTrainer:
             # Training
             st_total = time.time()
             logger.log_print("Training:")
-            for i in range(1, self.epochs + 1):
+            for i in range(1, self.epochs + 1):  # 1 ~ epochs
                 print("Experiment name: " + experiment_name)
                 st = time.time()
                 self.__train(train_loader)
@@ -366,7 +371,7 @@ class SegTrainer:
 if __name__ == '__main__':
     seg_trainer = SegTrainer()
 
-    cwd = os.getcwd()
+    cwd = os.getcwd() # 获取当前目录,指ImageSegmentation这个目录
     dataset_name = "isbi2012"
     data_bk_path = Path(cwd, "data", dataset_name, "data_backup")
     data_experiment_path = Path(cwd, "data", dataset_name, "data_experiment")

@@ -18,7 +18,9 @@ def data_preprocess(dataset_name: str, in_path: Path, out_path: Path, zfill_num:
     if dataset_name == "isbi2012":
         __prepare_data_isbi2012(in_path, out_path, zfill_num, suffix)
 
-# 由位图转换成image和label
+
+# TODO:zfill_num有什么用
+
 def __prepare_data_isbi2012(in_path: Path, out_path: Path, zfill_num: int = 3, imgs_suffix: str = 'png') -> None:
     """
         Prepare the data for training
