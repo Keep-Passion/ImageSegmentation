@@ -87,11 +87,12 @@ def prepare_weight_map(labels_path: Path, out_path: Path, func_names: List, clas
                                                                                   np.amin(weight[:, :, vis_idx])))
                 # print('    and the unique values are {}'.format(np.unique(weight[:, :, vis_idx])))
             plt.figure(figsize=(10, 10))
+            # cmap是colormap，为了方便人们观察，会把黑白图映射成有色图
             plt.subplot(1, class_num + 1, 1), plt.imshow(label, cmap="gray"), plt.title("label"), plt.axis("off")
             for vis_idx in range(class_num):
                 plt.subplot(1, class_num + 1, vis_idx + 2) # 行数、列数、图片标号
-                weight[:,:,vis_idx][0][1] = 3
+                # weight[:, :, vis_idx]实际上是512*512的矩阵，恰是图像的尺寸
                 plt.imshow(weight[:, :, vis_idx]), plt.title("{} {}".format(func_name, vis_idx)), plt.axis("off")
-            plt.show()
-            # print(str(Path(weight_path, file_name.replace('png', 'npy'))))
-            np.save(str(Path(weight_path, file_name.replace("png", "npy"))), weight) # TODO:这样做的作用是什么
+            plt.show()  # 0是黑，255是白
+            #print(str(Path(weight_path, file_name.replace('png', 'npy'))))
+            np.save(str(Path(weight_path, file_name.replace("png", "npy"))), weight)   # 把像素点的bcw权重保存成文件，后面训练需要用到

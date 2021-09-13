@@ -122,8 +122,8 @@ class SegTrainer:
 
     def data_preprocess(self, data_bk_path: Path, data_experiment_path: Path) -> None:
         print("Data Preprocess ... ")
-
-        data_preprocess(self.dataset_name, data_bk_path, data_experiment_path, zfill_num=self.zfill_num,         # 将位图转换成对应的image图和label图
+        # 将位图转换成对应的image图和label图
+        data_preprocess(self.dataset_name, data_bk_path, data_experiment_path, zfill_num=self.zfill_num,
                         suffix=self.imgs_suffix)  # you can change this
         print('Generating data in {}'.format(str(data_experiment_path)))
 
@@ -138,10 +138,11 @@ class SegTrainer:
                          std=[self.imgs_std])
         ])
 
-        # Calculate weight map    # TODO:这里没有太理解
+        # Calculate weight map    # 计算权重图，相当于为每个像素点都计算一次bcw权重和unet权重
         # Balanced Class Weight, bcw, Unet Weight, uw
         weights_func = ["bcw", "uw"]
-        prepare_weight_map(self.labels_path, data_experiment_path, weights_func, self.labels_class)   # TODO:这一步没太懂做什么的，为什么会有彩色图像出来
+        # 这一步会有彩色会有彩色图像出来的原因是imshow函数中用了cmap,图像映射
+        prepare_weight_map(self.labels_path, data_experiment_path, weights_func, self.labels_class)
         print("Generated weight map in {}".format(str(data_experiment_path)))
 
         print("Data Preprocess has done")
@@ -160,7 +161,7 @@ class SegTrainer:
         if use_preprocess:
             self.data_preprocess(data_bk_path, data_experiment_path)
         self.files_name = [str(item.name) for item in list(self.imgs_path.glob("*.{}".format(self.imgs_suffix)))]
-
+        # n_splits:划分为几块、shuffle:是否打乱、random_state:是否固定随机起点，
         kf = KFold(n_splits=self.kf_num, shuffle=True, random_state=self.seed_num)
 
         test_metrics = []
@@ -177,12 +178,12 @@ class SegTrainer:
         logger.log_print("Experiment: {}".format(experiment_name))
 
         # K-fold Cross Validation
-        # files_name = [‘001.png’, ...]
+        # files_name = [‘001.png’, ...],30个，这里的train_files和test_files是怎么区分的? --设置的kf的n_splits设置为5，训练测试集为4：1
         for kf_idx, (train_files, test_files) in enumerate(kf.split(self.files_name)):
             # Dataset split
             # we use k-fold cv to produce train set and test set, and then sample some data (10%)
             # from train set as val set (sampling without replacement)
-
+            # 10%数据用作验证集,+1是为了向上取整
             val_files = random.sample(list(train_files), int(len(train_files) * self.val_rate) + 1)
             train_files = list(set(train_files).difference(set(val_files)))
             train_files.sort()
@@ -198,14 +199,14 @@ class SegTrainer:
                 logger.log_print("Cross Validation: {}".format(str(self.kf_num) + '_fold_' + str(kf_idx)))
             else:
                 temp_parameters_path = global_parameters_path
-                if kf_idx >= 1:   # TODO:这里大于等于1为什么要退出
+                if kf_idx >= 1:   # 这里大于等于1为什么要退出？ 相当于如果不做kfold，那就只随机做一次划分
                     break
 
             train_dataset = SegDataset(self.data_experiment_path, train_files, self.weights_path,
                                        use_augment=self.use_augment, crop_size=self.crop_size, depth=None,
                                        norm_transform=self.z_score_norm)
             train_loader = DataLoader(train_dataset, batch_size=self.batch_size, shuffle=True)
-            train_one_loader = DataLoader(train_dataset, batch_size=1, shuffle=False)
+            train_one_loader = DataLoader(train_dataset, batch_size=1, shuffle=False)   # batch_size为1
             val_dataset = SegDataset(self.data_experiment_path, val_files, self.weights_path,
                                      use_augment=self.no_augment, crop_size=self.crop_size, depth=None,
                                      norm_transform=self.z_score_norm)
@@ -232,8 +233,8 @@ class SegTrainer:
             for i in range(1, self.epochs + 1):  # 1 ~ epochs
                 print("Experiment name: " + experiment_name)
                 st = time.time()
-                self.__train(train_loader)
-                train_metric = self.__val(i, train_one_loader, temp_parameters_path, logger, check_first_img=False)
+                self.__train(train_loader) # 训练
+                train_metric = self.__val(i, train_one_loader, temp_parameters_path, logger, check_first_img=False) # check_first_img为False
                 val_metric = self.__val(i, val_loader, temp_parameters_path, logger, check_first_img=True)
 
                 train_metric_list.append(train_metric)
@@ -242,13 +243,13 @@ class SegTrainer:
                 logger.log_print(
                     "Epoch {}: train_{} {:.4f}; val_{} {:.4f} \n".format(i, self.val_metric_name, train_metric_list[-1],
                                                                          self.val_metric_name, val_metric_list[-1]))
-
+                #
                 plot(i, train_metric_list, val_metric_list, temp_parameters_path, self.is_min_val_metirc,  # TODO
                      curve_name=self.val_metric_name, ignore_epoch=self.ignore_epoch_num)
-
+                # 判断为最佳model的条件,每3次迭代更新一次模型
                 if (i > self.ignore_epoch_num) and ((self.is_min_val_metirc and val_metric < val_baseline) or (
                         self.is_min_val_metirc is False and val_metric > val_baseline)):
-                    val_baseline = val_metric
+                    val_baseline = val_metric  # 这里更改了val_baseline，利用验证集的指标来做模型选择
                     val_best_epoch = i
                     torch.save(self.model.state_dict(), str(Path(temp_parameters_path, "best_model_state.pth")))
                 ed = time.time()
@@ -263,6 +264,7 @@ class SegTrainer:
 
             test_vis_path = Path(temp_parameters_path, "test_vis")
             torch.cuda.empty_cache()
+            # 进行测试
             test_metrics.append(
                 self.test(self.imgs_path, self.labels_path, test_files, self.best_model_path, test_vis_path))
             logger.log_print("test_metrics is {}".format(test_metrics))
