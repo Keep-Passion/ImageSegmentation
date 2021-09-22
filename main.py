@@ -281,7 +281,7 @@ class SegTrainer:
                 if self.weights_path is not None:
                     weight = sample['weight']
             output = self.model.forward(img)
-            loss = self.losser.get_loss(output, label, weight, self.loss_name)
+            loss = self.losser.get_loss(output, label, weight, self.loss_name, self.labels_class)
 
             self.optimizer.zero_grad()
             loss.backward()
@@ -308,7 +308,7 @@ class SegTrainer:
                 temp_metric = 0
 
                 if self.val_metric_name == 'loss':
-                    temp_metric = self.losser.get_loss(output_raw, label, weight, self.loss_name).item()
+                    temp_metric = self.losser.get_loss(output_raw, label, weight, self.loss_name, self.labels_class).item()
                 else:
                     output = output_raw.max(1)[1].data
                     output = output.cpu().squeeze().numpy()

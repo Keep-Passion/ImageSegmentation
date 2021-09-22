@@ -13,12 +13,12 @@ class Losser:
         self.wm_criterion   = WeightMapLoss()
         self.dice_criterion = DiceLoss()
     
-    def get_loss(self, output: Tensor, label: Tensor, weight: Tensor, loss_name: str) -> Tensor:
+    def get_loss(self, output: Tensor, label: Tensor, weight: Tensor, loss_name: str, class_num: int = 2) -> Tensor:
         if loss_name in ['bcw', 'uw']:
             loss = self.wm_criterion.forward(output, label, weight)
         if loss_name == 'dice':
-            label_one_hot = torch.stack([label == c for c in range(2)], dim=1).squeeze().type(torch.int32).type(torch.float)
-            loss = self.dice_criterion.forward(output.squeeze(), label_one_hot)
+            label_one_hot = torch.stack([label == c for c in range(class_num)], dim=1).squeeze(2).type(torch.int32).type(torch.float)
+            loss = self.dice_criterion.forward(output.squeeze(2), label_one_hot)
         return loss
 
 

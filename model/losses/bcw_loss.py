@@ -17,7 +17,9 @@ class BalancedClassWeight:
         for idx in range(self._class_num):
             idx_num = np.count_nonzero(label == idx)
             class_weight[idx, 0] = idx_num
-        min_num = np.amin(class_weight)
+        t_matrix = class_weight[class_weight != 0]
+        min_num = np.amin(t_matrix)
+        # min_num = np.amin(class_weight)
         class_weight = class_weight * 1.0 / min_num
         class_weight = np.sum(class_weight) - class_weight
         for idx in range(self._class_num):
