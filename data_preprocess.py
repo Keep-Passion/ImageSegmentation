@@ -18,6 +18,8 @@ def data_preprocess(dataset_name: str, in_path: Path, out_path: Path, zfill_num:
     if dataset_name == "isbi2012":
         __prepare_data_isbi2012(in_path, out_path, zfill_num, suffix)
 
+    if dataset_name == "superb2020":
+        __prepare_data_superb2020(in_path, out_path, zfill_num, suffix)
     
 def __prepare_data_isbi2012(in_path: Path, out_path: Path, zfill_num: int = 3, imgs_suffix: str = 'png') -> None:
     """
@@ -50,6 +52,78 @@ def __prepare_data_isbi2012(in_path: Path, out_path: Path, zfill_num: int = 3, i
             plt.show()            
     print("File Convert Done!")
 
+'''
+ author: wangbichao
+ target: handle the hospital photo
+'''
+
+
+def __prepare_data_superb2020(in_path: Path, out_path: Path, zfill_num: int = 3, imgs_suffix: str = 'png') -> None:
+    print(in_path)
+    print(out_path)
+    print(zfill_num)
+    print(imgs_suffix)
+    imgs_dir = Path(in_path, "data_backup", "images_tif")
+    labels_dir = Path(in_path, "data_backup", "labels_tif")
+
+    imgs_outpath = Path(out_path, "images")
+    labels_outpath = Path(out_path, "labels")
+    imgs_outpath.mkdir(parents=True, exist_ok=True)
+    labels_outpath.mkdir(parents=True, exist_ok=True)
+
+    print("File Converting...")
+    print("The image's path is {}".format(str(imgs_outpath)))
+    print("The label's path is {}".format(str(labels_outpath)))
+
+    idx = -1
+    for tiff_file in os.listdir(imgs_dir):
+        if tiff_file in list(os.listdir(labels_dir)):
+            imgs_inpath = Path(imgs_dir, tiff_file)
+            labels_inpath = Path(labels_dir, tiff_file)
+            imgs_tif = TIFF.open(imgs_inpath, mode='r')
+            labels_tif = TIFF.open(labels_inpath, mode='r')
+            for img, label in zip(list(imgs_tif.iter_images()), list(labels_tif.iter_images())):
+                idx += 1
+                io.imsave(str(Path(imgs_outpath, str(idx).zfill(zfill_num) + '.' + imgs_suffix)), img)
+                np.save(str(Path(labels_outpath, str(idx).zfill(zfill_num) + ".npy")),
+                        (label / 255))  # cell is 1 and border is 0
+                if idx == 0:
+                    plt.figure(figsize=(10, 10))
+                    plt.subplot(1, 2, 1), plt.imshow(img, cmap="gray"), plt.title("image"), plt.axis("off")
+                    plt.subplot(1, 2, 2), plt.imshow(label, cmap="gray"), plt.title("label"), plt.axis("off")
+                    plt.show()
+        else:
+            print("file not exist in labels: {}".format(tiff_file))
+    print("File Convert Done!")
+
+    #     print(imgs_inpath)
+    # for tiff_file in os.listdir(labels_inpath):
+    #     print(tiff_file)
+    # print(imgs_inpath)
+    # print(labels_inpath)
+    # imgs_tif = TIFF.open(imgs_inpath, mode='r')
+    # labels_tif = TIFF.open(labels_inpath, mode='r')
+    #
+    # imgs_outpath = Path(out_path, "images")
+    # labels_outpath = Path(out_path, "labels")
+    # imgs_outpath.mkdir(parents=True, exist_ok=True)
+    # labels_outpath.mkdir(parents=True, exist_ok=True)
+    # print("File Converting...")
+    # print("The image's path is {}".format(str(imgs_outpath)))
+    # print("The label's path is {}".format(str(labels_outpath)))
+    #
+    # idx = -1
+    # for img, label in zip(list(imgs_tif.iter_images()), list(labels_tif.iter_images())):
+    #     idx += 1
+    #     io.imsave(str(Path(imgs_outpath, str(idx).zfill(zfill_num) + '.' + imgs_suffix)), img)
+    #     np.save(str(Path(labels_outpath, str(idx).zfill(zfill_num) + ".npy")),
+    #             (label / 255))  # cell is 1 and border is 0
+    #     if idx == 0:
+    #         plt.figure(figsize=(10, 10))
+    #         plt.subplot(1, 2, 1), plt.imshow(img, cmap="gray"), plt.title("image"), plt.axis("off")
+    #         plt.subplot(1, 2, 2), plt.imshow(label, cmap="gray"), plt.title("label"), plt.axis("off")
+    #         plt.show()
+    # print("File Convert Done!")
 
 def prepare_weight_map(labels_path: Path, out_path: Path, func_names: List, class_num: int = 2) -> None:
     """

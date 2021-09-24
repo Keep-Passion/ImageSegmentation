@@ -46,7 +46,8 @@ class SegTrainer:
         self.labels_class = 2
 
         # data parameters
-        self.dataset_name = "isbi2012"
+        # self.dataset_name = "isbi2012"
+        self.dataset_name = "superb2020"
         self.data_experiment_path = None
         self.imgs_path = None
         self.labels_path = None
@@ -136,7 +137,8 @@ class SegTrainer:
 
         # Calculate weight map
         # Balanced Class Weight, bcw, Unet Weight, uw
-        weights_func = ["bcw", "uw"]
+        # weights_func = ["bcw", "uw"]
+        weights_func = ["bcw"]
         prepare_weight_map(self.labels_path, data_experiment_path, weights_func, self.labels_class)
         print("Generated weight map in {}".format(str(data_experiment_path)))
 
@@ -367,11 +369,18 @@ if __name__ == '__main__':
     seg_trainer = SegTrainer()
 
     cwd = os.getcwd()
-    dataset_name = "isbi2012"
-    data_bk_path = Path(cwd, "data", dataset_name, "data_backup")
+    # dataset_name = "isbi2012"
+
+    dataset_name = "superb2020"
+    # data_bk_path = Path(cwd, "data", dataset_name, "data_backup")
+    # data_experiment_path = Path(cwd, "data", dataset_name, "data_experiment")
+
+    data_bk_path = Path(cwd, "data", dataset_name)
     data_experiment_path = Path(cwd, "data", dataset_name, "data_experiment")
     parameters_path = Path(cwd, "experiment")
-
+    # print(data_bk_path)
+    # print(data_experiment_path)
+    # print(parameters_path)
+    #
     use_preprocess = True
-
     seg_trainer.start_training(data_bk_path, data_experiment_path, parameters_path, use_preprocess)
