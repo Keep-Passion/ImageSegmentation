@@ -27,7 +27,7 @@ class WeightMapLoss(nn.Module):
         Calculate weighted loss with weight maps
     """
     def forward(self, pred: Tensor, target: Tensor, weight_maps: Tensor, eps: float = 1e-20) -> Tensor:
-        class_num = weight_maps.size()[1]
+        class_num = weight_maps.size()[2]
         mask = target.float()
         logit = torch.softmax(pred, dim=1)
         loss = 0

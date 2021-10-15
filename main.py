@@ -357,8 +357,8 @@ class SegTrainer:
                 plt.subplot(1, 3, 1), plt.imshow(img, cmap="gray"), plt.title("img"), plt.axis("off")
                 plt.subplot(1, 3, 2), plt.imshow(label, cmap="gray"), plt.title("label"), plt.axis("off")
                 plt.subplot(1, 3, 3), plt.imshow(output, cmap="gray"), plt.title("output"), plt.axis("off")
-                plt.show()
                 plt.savefig(str(Path(test_vis_path, img_name)))
+                plt.show()
 
         return test_metrics / len(test_files)
 
