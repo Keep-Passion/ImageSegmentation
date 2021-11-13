@@ -187,8 +187,8 @@ class GpuDetector:
         """
             Get current gpu status and gpu device
         """
-        # return self._gpu_is_available, self._gpu_idx_in_use
-        return False, self._gpu_idx_in_use
+        return self._gpu_is_available, self._gpu_idx_in_use
+        # return False, self._gpu_idx_in_use
 
     def __check_gpu_status(self, gpu_idx: int):
         """
