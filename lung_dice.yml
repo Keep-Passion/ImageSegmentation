@@ -1,0 +1,55 @@
+data:
+  name: lung
+  dir: /maboyuan/ImageSegmentation/data/lung/data_experiment
+  imgs_num: 30
+  imgs_mean: 0.49475772084753505
+  imgs_std:  0.1678160259016179
+  imgs_channels: 1
+  imgs_depth:
+  imgs_suffix: png
+  labels_class_num: 2
+  weights_name: bcw
+  use_kfold: false
+  kf_num: 5
+  val_rate: 0.1
+  is_load_data_to_cpu_mem: false
+  all_files:
+  train_files_list:
+  val_files_list:
+  test_files_list:
+gpu:
+  use_gpu: true
+  cuda_devices:
+  - 0
+train:
+  seed: 2020
+  model_name: unet
+  batch_size: 18
+  crop_size: 512
+  num_worker: 32
+  pin_memory: true
+  lr: 0.0001
+  optimizer:
+  scheduler:
+  - stepLR
+  - 10
+  - 0.8
+  epochs: 20
+  loss_name: dice
+  train_augment:
+  - rand_crop
+  - rand_vflip
+val:
+  batch_size: 50
+  metric_name: loss
+  is_show_first_img: true
+  show_interval: 1
+  ignore_show_epoch_num: 2
+test:
+  input_size: 512
+  overlap_size: 16
+  batch_size: 40
+  aug_type: 0
+  use_post_process: true
+  metric_name: dice
+  show_mask: true

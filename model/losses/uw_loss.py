@@ -6,31 +6,8 @@ from skimage import measure
 import matplotlib.pyplot as plt
 import torch
 from typing import List, Tuple, Dict
+
 from .bcw_loss import BalancedClassWeight
-
-# class BalancedClassWeight:
-#     """
-#     Balanced Class Weight
-#     If ratio of classes of image is [n1:n2:n3...:nm], m is class number, and the min ratio is 1
-#     So the weight is [r_sum - n1, r_sum - n2, r_sum - n3, ..., r_sum - nm]
-#     where r_sum = n1 + n2 + ... +nm
-#     """
-#     def __init__(self, class_num: int = 2) -> None:
-#         self._class_num = class_num
-#
-#     def get_weight(self, label: np.ndarray) -> np.ndarray:
-#         weight = np.zeros((label.shape[0], label.shape[1], self._class_num))
-#         class_weight = np.zeros((self._class_num, 1))
-#         for idx in range(self._class_num):
-#             idx_num = np.count_nonzero(label == idx)
-#             class_weight[idx, 0] = idx_num
-#         min_num = np.amin(class_weight)
-#         class_weight = class_weight * 1.0 / min_num
-#         class_weight = np.sum(class_weight) - class_weight
-#         for idx in range(self._class_num):
-#             weight[:, :, idx][label == idx] = class_weight[idx, 0]
-#         return weight
-
 
 class UnetWeight:
     """
@@ -56,7 +33,7 @@ class UnetWeight:
         self._verbose = verbose
         self._bcw_weight = BalancedClassWeight()
 
-    def get_weight(self, mask: np.ndarray, method: int = 0, neighbors: int = 4, bg_pixel: int = 0) -> np.ndarray:
+    def get_weight(self, mask: np.ndarray, method: int = 0, connectivity: int = 1, bg_pixel: int = 0) -> np.ndarray:
         """
             返回根据Unet的方法计算的Weight图,本文件提供5种方法
             :param method: 选择什么样的方法，[0,1,2,3,4]
@@ -67,25 +44,25 @@ class UnetWeight:
         weight = None
         if method == 0:
             weight = self._calculate_by_distanceTransform(
-                mask, neighbors=neighbors, bg_pixel=bg_pixel)            
+                mask, connectivity=connectivity, bg_pixel=bg_pixel)            
         elif method == 1:
             weight = self._calculate_by_torch(
-                mask, neighbors=neighbors, bg_pixel=bg_pixel)
+                mask, connectivity=connectivity, bg_pixel=bg_pixel)
         elif method == 2:
             weight = self._calculate_by_parallel_matrix(
-                mask, neighbors=neighbors, bg_pixel=bg_pixel)
+                mask, connectivity=connectivity, bg_pixel=bg_pixel)
         elif method == 3:
             weight = self._calculate_by_contours(
-                mask, neighbors=neighbors, bg_pixel=bg_pixel)
+                mask, connectivity=connectivity, bg_pixel=bg_pixel)
         elif method == 4:
             weight = self._calculate_by_point_operation(
-                mask, neighbors=neighbors, bg_pixel=bg_pixel)
+                mask, connectivity=connectivity, bg_pixel=bg_pixel)
         uw_map = self._bcw_weight.get_weight(mask)
         uw_map[:, :, 0] += weight
         # return weight
         return uw_map
     
-    def _calculate_by_distanceTransform(self, mask: np.ndarray, neighbors: int = 4, bg_pixel: int = 0) -> np.ndarray:
+    def _calculate_by_distanceTransform(self, mask: np.ndarray, connectivity: int = 1, bg_pixel: int = 0) -> np.ndarray:
         """
             针对真值图 mask 计算U-Net的权重，并返回weight，该方法对每个独立组织的反相进行距离变换函数计算，得到任意像素点到
             该组织的距离，求得所有像素点到任意组织的距离后，取最小和次小计算
@@ -94,7 +71,7 @@ class UnetWeight:
             :param bg_pixel: 背景像素，针对铝镧枝晶为0
             :return: 返回权重图weight
         """
-        mask_label, num_label = measure.label(mask, neighbors=neighbors, background=bg_pixel, return_num=True)
+        mask_label, num_label = measure.label(mask, connectivity=1, background=bg_pixel, return_num=True)
         weight = np.zeros((mask.shape[0], mask.shape[1]))
         maps = np.zeros((mask.shape[0], mask.shape[1], num_label))
         if num_label >= 2:
@@ -109,7 +86,7 @@ class UnetWeight:
         weight[mask == 1] = 0
         return weight
 
-    def _calculate_by_torch(self, mask: np.ndarray, neighbors: int = 4, bg_pixel: int = 0) -> np.ndarray:
+    def _calculate_by_torch(self, mask: np.ndarray, connectivity: int = 4, bg_pixel: int = 0) -> np.ndarray:
         """
             针对真值图 mask 计算U-Net的权重，并返回weight，先计算mask的轮廓坐标，再将mask所有点的坐标与轮廓坐标求欧式距离，
             形成（h,w,n）的三维距离矩阵，h为高，w为宽，n为轮廓点个数，再将上述矩阵按照label的数目求最小，形成（h,w,num_label）,
@@ -133,7 +110,7 @@ class UnetWeight:
         contours_map = np.zeros(mask.shape)
         cv2.drawContours(contours_map, contours, -1, 1, 1)
         mask_label, num_label = measure.label(
-            mask, neighbors=neighbors, background=bg_pixel, return_num=True)
+            mask, connectivity = 1, background = bg_pixel, return_num = True)
         contours_x, contours_y = np.where(contours_map != 0)
         contours_x = np.array(contours_x)
         contours_y = np.array(contours_y)
@@ -191,7 +168,7 @@ class UnetWeight:
             "  The duration of min is {}".format(end_time - start_time))
         return weight
 
-    def _calculate_by_parallel_matrix(self, mask: np.ndarray, neighbors: int = 4, bg_pixel: int = 0) -> np.ndarray:
+    def _calculate_by_parallel_matrix(self, mask: np.ndarray, connectivity: int = 1, bg_pixel: int = 0) -> np.ndarray:
         """
             针对真值图 mask 计算U-Net的权重，并返回weight，先计算mask的轮廓坐标，再将mask所有点的坐标与轮廓坐标求欧式距离，
             形成（h,w,n）的三维距离矩阵，h为高，w为宽，n为轮廓点个数，再将上述矩阵按照label的数目求最小，形成（h,w,num_label）,
@@ -215,7 +192,7 @@ class UnetWeight:
         contours_map = np.zeros(mask.shape)
         cv2.drawContours(contours_map, contours, -1, 1, 1)
 
-        mask_label, num_label = measure.label(mask, neighbors=neighbors, background=bg_pixel, return_num=True)
+        mask_label, num_label = measure.label(mask, connectivity=connectivity, background=bg_pixel, return_num=True)
         contours_map = contours_map * mask_label
         contours_x, contours_y = np.where(contours_map != 0)
         contours_x = np.array(contours_x)
@@ -285,7 +262,7 @@ class UnetWeight:
         self._print_screen_log("  The duration of min is {}".format(end_time - start_time))
         return weight
     
-    def _calculate_by_contours(self, mask: np.ndarray, neighbors: int = 4, bg_pixel: int = 0) -> np.ndarray:
+    def _calculate_by_contours(self, mask: np.ndarray, connectivity: int = 1, bg_pixel: int = 0) -> np.ndarray:
         """
             针对真值图 mask 计算U-Net的权重，并返回weight，先计算mask的轮廓坐标，再将mask背景点的坐标与轮廓坐标求欧式距离，
             找到与各个Label的d1,d2求weight
@@ -297,7 +274,7 @@ class UnetWeight:
         """
         weight = np.zeros(mask.shape, dtype=np.float32)
 
-        mask_label, num_label = measure.label(mask, neighbors=neighbors, background=bg_pixel, return_num=True)
+        mask_label, num_label = measure.label(mask, connectivity=connectivity, background=bg_pixel, return_num=True)
         # 计算轮廓点，每个轮廓上的值为标签
         # 使用OpenCV2时用这个：
         contours, hierarchy = cv2.findContours(
@@ -342,7 +319,7 @@ class UnetWeight:
         min_dis.sort()
         return min_dis[0], min_dis[1]
     
-    def _calculate_by_point_operation(self, mask: np.ndarray, neighbors: int = 4, bg_pixel: int = 0) -> np.ndarray:
+    def _calculate_by_point_operation(self, mask: np.ndarray, connectivity: int = 1, bg_pixel: int = 0) -> np.ndarray:
         """
             针对真值图 mask 计算U-Net的权重，并返回weight，先计算mask的Label，
             再将mask中背景点的坐标与各个Label的坐标求欧式距离，
@@ -354,7 +331,7 @@ class UnetWeight:
             :return: 返回权重图weight
         """
         weight = np.zeros(mask.shape, dtype=np.float32)
-        mask_label, num_label = measure.label(mask, neighbors=neighbors, 
+        mask_label, num_label = measure.label(mask, connectivity=connectivity, 
                                       background=bg_pixel, return_num=True)
         h, w = mask_label.shape[:2]
         for i in range(h):

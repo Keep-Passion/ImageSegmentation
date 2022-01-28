@@ -1,54 +1,53 @@
-import os
-import h5py
-from skimage import io
-import numpy as np
-from libtiff import TIFF
-from pathlib import Path
-from typing import List, Tuple, Dict
+import sys,os
+sys.path.append(os.getcwd()+'/../../')
+
+import torch
+import torch.nn as nn
+from torch import Tensor
 import matplotlib.pyplot as plt
-import warnings
+
+from typing import Callable, Iterable, List, Set, Tuple, Dict
+from pathlib import Path
+
+from .bcw_loss  import BalancedClassWeight
+from .dice_loss import DiceLoss
+from .uw_loss import UnetWeight
 from utils import *
-from model.losses.bcw_loss import *
-from model.losses.uw_loss import *
 
 
-# The first step of deep learning experiment is data preprocessing.   
-
-def data_preprocess(dataset_name: str, in_path: Path, out_path: Path, zfill_num: int = 3, suffix: str = "png") -> None:
-    if dataset_name == "isbi2012":
-        __prepare_data_isbi2012(in_path, out_path, zfill_num, suffix)
-
+class Losser:
+    """
+        Loss class for network training, you can add your loss in here
+    """
+    def __init__(self):
+        self.wm_criterion   = WeightMapLoss()
+        self.dice_criterion = DiceLoss()
     
-def __prepare_data_isbi2012(in_path: Path, out_path: Path, zfill_num: int = 3, imgs_suffix: str = 'png') -> None:
+    def get_loss(self, output: Tensor, label: Tensor, weight: Tensor, loss_name: str, class_num: int = 2) -> Tensor:
+        if loss_name in ['bcw', 'uw']:
+            loss = self.wm_criterion.forward(output, label, weight)
+        if loss_name == 'dice':
+            label_one_hot = torch.stack([label == c for c in range(class_num)], dim=1).squeeze(2).type(torch.float32)
+            loss = self.dice_criterion.forward(output.squeeze(2), label_one_hot)
+        return loss
+
+
+class WeightMapLoss(nn.Module):
     """
-        Prepare the data for training
-        The data can be download from ISBI2012 challange (website: 'http://brainiac2.mit.edu/isbi_challenge/')
+        Calculate weighted loss with weight maps
     """
-
-    imgs_inpath = Path(in_path, "train-volume.tif")
-    labels_inpath = Path(in_path, "train-labels.tif")
-    imgs_tif = TIFF.open(imgs_inpath, mode='r')
-    labels_tif = TIFF.open(labels_inpath, mode='r')
-
-    imgs_outpath = Path(out_path, "images")
-    labels_outpath = Path(out_path, "labels")
-    imgs_outpath.mkdir(parents=True, exist_ok=True) 
-    labels_outpath.mkdir(parents=True, exist_ok=True)
-    print("File Converting...")
-    print("The image's path is {}".format(str(imgs_outpath  )))
-    print("The label's path is {}".format(str(labels_outpath)))
-
-    idx = -1
-    for img, label in zip( list(imgs_tif.iter_images()),  list(labels_tif.iter_images()) ):
-        idx += 1
-        io.imsave(str(Path(imgs_outpath, str(idx).zfill(zfill_num) + '.' + imgs_suffix)), img)
-        np.save(str(Path(labels_outpath, str(idx).zfill(zfill_num) + ".npy")), (label/255))  # cell is 1 and border is 0
-        if idx == 0:
-            plt.figure(figsize=(10, 10))
-            plt.subplot(1, 2, 1), plt.imshow(img,   cmap="gray"), plt.title("image"), plt.axis("off")
-            plt.subplot(1, 2, 2), plt.imshow(label, cmap="gray"), plt.title("label"), plt.axis("off")
-            plt.show()            
-    print("File Convert Done!")
+    def forward(self, pred: Tensor, target: Tensor, weight_maps: Tensor, eps: float = 1e-20) -> Tensor:
+        class_num = weight_maps.size()[1]
+        mask = target.float()
+        logit = torch.softmax(pred, dim=1)
+        loss = 0
+        weight_maps = weight_maps.float()
+        for idx in range(class_num):
+            if weight_maps.dim() == 4:
+                loss += -1 * weight_maps[:, idx, :, :] * (torch.log(logit[:, idx, :, :]) + eps)
+            elif weight_maps.dim() == 5:
+                loss += -1 * weight_maps[:, idx, :, :, :] * (torch.log(logit[:, idx, :, :, :]) + eps)
+        return loss.sum() / weight_maps.sum()
 
 
 def prepare_weight_map(labels_path: Path, out_path: Path, func_names: List, class_num: int = 2) -> None:
@@ -66,8 +65,8 @@ def prepare_weight_map(labels_path: Path, out_path: Path, func_names: List, clas
     print("Weight Map Calculation...")
     for file_path in file_paths:
         file_name = file_path.name
-        print("Analysing {} ..." .format(file_name))
-        label = load_img(file_path)
+        print("Analyzing {} ..." .format(file_name))
+        label = load_data_from_disk(file_path)
         for func_name in func_names:
             weight_path = Path(out_path, func_name)
             weight_path.mkdir(parents=True, exist_ok=True)
