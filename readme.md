@@ -45,3 +45,6 @@ artifacts on the border. In this code, we provide an overlap-tile strategy, by f
 
 The visualization of simple crop strategy and overlap-tile strategy is shown below:
 ![avatar](/appendix/overlaptile_result.png)
+
+## losses file
+The pretrained model of topo-aware-loss can be found at the baidu disk（https://pan.baidu.com/s/1SoeuHF0SOHKekyoJOG1B0g key: jn2t）

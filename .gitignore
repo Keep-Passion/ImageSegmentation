@@ -131,6 +131,10 @@ dmypy.json
 # data experiment
 data/isbi2012/data_experiment/
 
+# loss
+mode/losses/vgg19_bn/
+topo_aware_loss_vgg19_bn.zip
+
 # pycharm
 .idea
 
