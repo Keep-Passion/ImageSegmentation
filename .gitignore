@@ -132,7 +132,7 @@ dmypy.json
 data/isbi2012/data_experiment/
 
 # loss
-mode/losses/vgg19_bn/
+model/losses/vgg19_bn/vgg19_bn-c79401a0.pth
 topo_aware_loss_vgg19_bn.zip
 
 # pycharm
