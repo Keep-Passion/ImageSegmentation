@@ -33,7 +33,7 @@ def vis_result(img: np.ndarray, label: np.ndarray, output: np.ndarray, result_di
     column_num = 3
     if weight is not None:
         column_num = 5
-    plt.subplot(1, column_num, 1), plt.imshow(img,    cmap="gray"), plt.title("img"), plt.axis("off")
+    # plt.subplot(1, column_num, 1), plt.imshow(img, cmap="gray"), plt.title("img"), plt.axis("off")
     if show_mask:
         label  = add_mask(label, img)
         output = add_mask(output, img)

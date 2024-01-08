@@ -1,28 +1,17 @@
-import os
-from pathlib import Path
-import h5py
-from IPython.display import clear_output
-import matplotlib.pyplot as plt
-%matplotlib inline
+# %matplotlib inline
 
-import cv2, time
-import random
-import skimage
-import numpy as np
-import torch
-import torch.nn as nn
-import torch.optim as optim
-from torch.utils.data import DataLoader
-import torchvision.transforms as tr
-from sklearn.model_selection import KFold
-from skimage import morphology
 # import pandas as pd
+from torch.optim import Adam
+from accelerate import accelerator
+from ema_pytorch import EMA
 
 from utils import *
 
 from model.segtrainer import SegTrainer
 from model.seginferencer import SegInferencer
 from model.losses import losser
+from ddpm.denoising_diffusion_pytorch import Unet, GaussianDiffusion
+
 
 # you can write your own func of data_preprocess begin at training
 def data_preprocess(in_dir: Path, out_dir: Path, suffix: str = "png", labels_class_num: int = 2) -> Tuple:
@@ -146,6 +135,43 @@ def inference(experiment_name: str) -> None:
     is_test_all = True
     seg_trainer = SegInferencer(experiment_name, is_test_all, data_postprocess)
     seg_trainer.start_inference()
+
+
+def build_ddpm():
+    unet = Unet(
+        dim=128,
+        dim_mults=(1, 2, 4, 8),
+        flash_attn=True
+    )
+
+    ddpm = GaussianDiffusion(
+        unet,
+        image_size=256,
+        timesteps=1000,  # number of steps
+        sampling_timesteps=250,
+        # number of sampling timesteps (using ddim for faster inference [see citation for ddim paper])
+        objective='pred_x0'
+    )
+
+    return ddpm
+
+def train_ddpm_unet(data_name, data_bk_dir, data_dir, params_path, custom_desc4):
+
+    ddpm = build_ddpm()
+    ddpm_opt = Adam(ddpm.parameters(), lr=1e-4, betas=(0.9, 0.99))
+    ddpm_path = r'/guocancheng/denoising-diffusion-pytorch/results_0105/model-best.pt'  # predict x0
+    data = torch.load(ddpm_path, map_location=accelerator.device)
+    ddpm_opt.load_state_dict(data['opt'])
+    if accelerator.is_main_process:
+        ddpm_ema = EMA(ddpm, beta=0.995, update_every=4)
+        ddpm_ema.to(accelerator.device)
+        ddpm_ema.load_state_dict(data["ema"])
+    else:
+        ddpm_ema = None
+    ddpm.load_state_dict(data['model'])
+    del data
+
+
 
 
 if __name__ == '__main__':

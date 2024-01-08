@@ -1,0 +1,57 @@
+data:
+  name: alla
+  dir: data/alla/train
+  imgs_num: 220
+  imgs_mean: 0.49475772084753505
+  imgs_std:  0.1678160259016179
+  imgs_channels: 3
+  imgs_depth:
+  imgs_suffix: png
+  labels_class_num: 2
+  weights_name: bcw
+  use_kfold: false
+  kf_num: 5
+  val_rate: 0.1
+  is_load_data_to_cpu_mem: true
+  all_files:
+  train_files_list:
+  val_files_list:
+  test_files_list:
+gpu:
+  use_gpu: true
+  cuda_devices:
+  - 0
+train:
+  seed: 2023
+  model_name: unet
+  batch_size: 10
+  crop_size: 256
+  num_worker: 32
+  pin_memory: true
+  lr: 0.0001
+  optimizer:
+  scheduler:
+  - stepLR
+  - 10
+  - 0.8
+  epochs: 300
+  loss_name: bcw
+  train_augment:
+  - rand_crop
+  - rand_rotate
+  - rand_vflip
+  - rand_hflip
+val:
+  batch_size: 10
+  metric_name: loss
+  is_show_first_img: true
+  show_interval: 1
+  ignore_show_epoch_num: 2
+test:
+  input_size: 400
+  overlap_size: 16
+  batch_size: 2
+  aug_type: 0
+  use_post_process: true
+  metric_name: dice
+  show_mask: false
