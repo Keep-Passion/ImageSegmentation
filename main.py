@@ -140,6 +140,8 @@ def inference(experiment_name: str) -> None:
 def build_ddpm():
     unet = Unet(
         dim=128,
+        out_dim=4,
+        channels=4,
         dim_mults=(1, 2, 4, 8),
         flash_attn=True
     )

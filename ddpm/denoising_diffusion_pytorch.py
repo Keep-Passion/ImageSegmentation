@@ -2,6 +2,7 @@ import math
 from pathlib import Path
 from functools import partial
 from collections import namedtuple
+from random import random
 
 import torch
 from torch import nn
@@ -293,7 +294,9 @@ class Unet(nn.Module):
 
         self.channels = channels
         self.self_condition = self_condition
-        input_channels = channels * (2 if self_condition else 1)
+
+        # input_channels = channels * (2 if self_condition else 1)
+        input_channels = 4
 
         init_dim = default(init_dim, dim)
         self.init_conv = nn.Conv2d(input_channels, init_dim, 7, padding = 3)
@@ -780,7 +783,7 @@ class GaussianDiffusion(nn.Module):
             extract(self.sqrt_one_minus_alphas_cumprod, t, x_start.shape) * noise
         )
 
-    def p_losses(self, x_start, cond_img, t, noise = None, clip_x_start = True, offset_noise_strength = None):
+    def p_losses(self, x_start, t, cond_img=None, noise = None, clip_x_start = True, offset_noise_strength = None):
         b, c, h, w = x_start.shape
 
         noise = default(noise, lambda: torch.randn_like(x_start))
@@ -794,22 +797,22 @@ class GaussianDiffusion(nn.Module):
             noise += offset_noise_strength * rearrange(offset_noise, 'b c -> b c 1 1')
 
         # noise sample
-
+        # 加噪过程 add noise
         x = self.q_sample(x_start = x_start, t = t, noise = noise)
 
         # if doing self-conditioning, 50% of the time, predict x_start from current set of times
         # and condition with unet with that
         # this technique will slow down training by 25%, but seems to lower FID significantly
 
-        # x_self_cond = None
-        # if self.self_condition and random() < 0.5:
-        #     with torch.inference_mode():
-        #         x_self_cond = self.model_predictions(x, t).pred_x_start
-        #         x_self_cond.detach_()
+        x_self_cond = None
+        if self.self_condition and random() < 0.5:
+            with torch.inference_mode():
+                x_self_cond = self.model_predictions(x, t).pred_x_start
+                x_self_cond.detach_()
 
         # predict and take gradient step
 
-        model_out = self.model(x, t, cond_img)
+        model_out = self.model(x, t, x_self_cond)
         
         maybe_clip = partial(torch.clamp, min = -1., max = 1.) if clip_x_start else identity
 
@@ -844,14 +847,13 @@ class GaussianDiffusion(nn.Module):
         
         return loss, self.unnormalize(x_start_res)
 
-    def forward(self, img, cond_img, *args, **kwargs):
+    def forward(self, img, *args, **kwargs):
         b, c, h, w, device, img_size, = *img.shape, img.device, self.image_size
         assert h == img_size and w == img_size, f'height and width of image must be {img_size}'
         t = torch.randint(0, self.num_timesteps, (b,), device=device).long()
 
         img = self.normalize(img)
-        cond_img = self.normalize(cond_img)
-        return self.p_losses(img, cond_img, t, *args, **kwargs)
+        return self.p_losses(img, t, *args, **kwargs)
 
 
 class FocalLossRegression(nn.Module):

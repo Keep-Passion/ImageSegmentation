@@ -4,7 +4,7 @@ import numpy as np
 import torch
 import math
 from pathlib import Path
-from skimage import io
+from skimage import io, color
 from torch import Tensor
 import torch.nn as nn
 import torch.nn.functional as F
@@ -25,7 +25,7 @@ class SegInferencer:
     """
         Inference class
     """
-    def __init__(self, experiment_name: str, is_test_all: bool = True, data_postprocess = None) -> None:
+    def __init__(self, ddpm_model, experiment_name: str, accelerator, is_test_all: bool = True, data_postprocess = None) -> None:
         
         self.experiment_name = experiment_name
         self.experiment_dir = Path(Path.cwd(), "experiment", self.experiment_name)
@@ -37,6 +37,8 @@ class SegInferencer:
         # model parameters
         self.net_class = Network(self.params["train"]["model_name"])
         self.model = None
+        self.ddpm = ddpm_model
+        self.accelerator = accelerator
         
         # gpu parameters
         self.gpu_detector = GpuDetector()
@@ -68,12 +70,13 @@ class SegInferencer:
                 test_metric_list.append(test_metric)  
         else:
             pth_path = Path(self.experiment_dir, "best_model_state.pth")
+            ddpm_pth = Path(self.experiment_dir, "best_ddpm_model_state.pth")
             if self.is_test_all:
                 files_list = self.params["data"]["all_files"]
-                test_metric = self.test(pth_path, files_list, 'all_vis')
+                test_metric = self.test(pth_path, ddpm_pth, files_list, 'all_vis')
             else:
                 files_list = self.params["data"]["test_files_list"][0]
-                test_metric = self.test(pth_path, files_list, 'test_vis')
+                test_metric = self.test(pth_path, ddpm_pth, files_list, 'test_vis')
             test_metric_list.append(test_metric)
         
         if self.params["data"]["use_kfold"]:
@@ -82,9 +85,10 @@ class SegInferencer:
             self.logger.log_print("The test {} is: {}".format(self.params["test"]["metric_name"], test_metric_list[0]))
         
         
-    def test(self, pth_path, files_list, vis_foloder):
+    def test(self, pth_path, ddpm_pth_path, files_list, vis_foloder):
         try:
-            net_inference = NetInference(self.gpu_detector, self.params, net_class = self.net_class, pth_address = pth_path, post_process=self.data_postprocess)
+            net_inference = NetInference(self.accelerator, self.ddpm, self.gpu_detector, self.params, net_class = self.net_class, pth_address = pth_path,
+                                         ddpm_pth_address = ddpm_pth_path, post_process=self.data_postprocess)
         except AssertionError as e:
             print(e)
         except FileNotFoundError as e:
@@ -96,15 +100,20 @@ class SegInferencer:
             print("Analyzing {}".format(img_name))
             img    = load_data_from_disk(Path(self.params["data"]["dir"], "images", img_name))
             label  = load_data_from_disk(Path(self.params["data"]["dir"], "labels", img_name.replace(self.params["data"]["imgs_suffix"], "npy")))
-            output = net_inference.forward_one_image(img)
+
+            # ddpm
+            pred_x0 = net_inference.forward_x0(img, label)
+
+            # unet
+            output, post_img = net_inference.forward_old(pred_x0, False)
             temp_metric = metrics.get_metric(self.params["test"]["metric_name"], output, label)
             self.logger.log_print("The {} of {} is {}".format(self.params["test"]["metric_name"], img_name, temp_metric))
             test_metrics += temp_metric
             
             if test_vis_dir is not None:
                 test_vis_dir.mkdir(parents=True, exist_ok=True)
-                vis_result(img, label, output, test_vis_dir, self.logger, 
-                           description="test_" + img_name + "_", show_mask = self.params["test"]["show_mask"])
+                vis_result(img, label, pred_x0, output, test_vis_dir, self.logger,
+                           description="test_" + img_name + "_", show_mask = self.params["test"]["show_mask"], isTrain = False)
             
         return test_metrics / len(files_list)
     
@@ -114,7 +123,8 @@ class NetInference:
     """
         Net Inference for 2D image segmentation
     """
-    def __init__(self, gpu_detector, params: Dict, net_class: Network, pth_address: Path = None, post_process = None):
+    def __init__(self, accelerator, ddpm, gpu_detector, params: Dict, net_class: Network, pth_address: Path = None, ddpm_pth_address: Path = None,
+                 post_process = None):
         
         self.params = params
         
@@ -138,15 +148,21 @@ class NetInference:
         self._use_post_process = self.params["test"]["use_post_process"]
         
         self._gpu_detector = gpu_detector
+        self._accelerator = accelerator
         
         self._model = net_class.get_net(self.params["data"]["imgs_channels"], self.params["data"]["labels_class_num"])
+        self._ddpm = ddpm
 
         gpu_status, gpu_idx_in_use = self._gpu_detector.get_current_gpu()
         if gpu_status:
             self._model = nn.DataParallel(self._model, device_ids = gpu_idx_in_use).cuda()
+            self._ddpm = nn.DataParallel(self._ddpm, device_ids = gpu_idx_in_use).cuda()
             
         # model parameters setting
         self._pth_address = pth_address
+        self._ddpm_pth = ddpm_pth_address
+        self._accelerator = accelerator
+
         try:
             self.__load_pth()
         except (AssertionError, FileNotFoundError) as e:
@@ -156,7 +172,103 @@ class NetInference:
         
         # post process
         self.post_process = post_process
-    
+
+    def forward_x0(self, img: np.ndarray, label: np.ndarray) -> (np.ndarray):
+        self._ddpm.eval()
+
+        # input format
+        img = self._z_score_norm(img)
+        label = self._z_score_norm(label)
+        # infer
+        # inference
+        img = load_tensor_to_cgpu(img, self.params, self._gpu_detector.get_current_gpu()[1])
+        label = load_tensor_to_cgpu(label, self.params, self._gpu_detector.get_current_gpu()[1])
+        with torch.no_grad():
+            img = img.to(self._accelerator.device)
+            label = label.to(self._accelerator.device)
+            loss_diff, img_pred = self._ddpm.forward(img, label)
+        return img_pred
+
+    def forward_old(self, in_ori_img: np.ndarray, is_gray: bool = True) -> (
+    np.ndarray, np.ndarray):
+        """
+            Forward one image, return segmentation result, some errers will be raised
+        """
+        #         assert self._load_status, "Please load parameters correctly"
+        assert isinstance(in_ori_img, np.ndarray), "The input image must be numpy type"
+        # assert in_ori_img.ndim == 2,  "The input image should be gray scale"
+        assert isinstance(self._input_size,
+                          int) and self._input_size % 16 == 0, "The input size must be int and can be divided by 16"
+        assert isinstance(self._overlap_size,
+                          int) and self._overlap_size > 0, "The overlap size must be int and greater than 0"
+        assert self._input_size > (
+                    2 * self._overlap_size), "The input size {} must be greater than 2 times overlap size {}".format(
+            self._input_size, self._overlap_size)
+        assert self._aug_type in [0, 1, 2], "The parameter for test time augmentation must be a value in {0,1,2}"
+        assert isinstance(self._batch_size,
+                          int) and self._batch_size > 0, "The batch size must be int and greater than 0"
+
+        # For overlap tile strategy and tta, the sub imgs are in List Type
+        overlap_tile = OverlapTile(crop_size=self._input_size, overlap_size=self._overlap_size)
+        tta = TestTimeAug(aug_type=self._aug_type)
+
+        self._model.eval()
+        with torch.no_grad():
+            # seg test
+            # overlap-tile strategy, crop img into sub-imgs in List and revert after network inference
+            if is_gray:
+                in_imgs = overlap_tile.crop(in_ori_img)
+            else:
+                red = overlap_tile.crop(in_ori_img.transpose((2, 0, 1))[0])
+                green = overlap_tile.crop(in_ori_img.transpose((2, 0, 1))[1])
+                blue = overlap_tile.crop(in_ori_img.transpose((2, 0, 1))[2])
+                in_imgs = []
+                for i in range(len(red)):
+                    in_imgs.append(np.stack((red[i], green[i], blue[i])).transpose((1, 2, 0)))
+            in_imgs = tta.aug_input(in_imgs)
+            out_imgs = []
+            try:
+                img_idx = 0
+                h = in_imgs[0].shape[0]
+                w = in_imgs[0].shape[1]
+                while img_idx < len(in_imgs):
+                    iter_batch_size = self._batch_size
+                    if img_idx + iter_batch_size > len(in_imgs):
+                        # if the len(in_imgs) can not be divided by batch_size, the batch size of last itereation should be
+                        # len(in_imgs) - img_idx
+                        iter_batch_size = len(in_imgs) - img_idx
+
+                    in_tensor = torch.zeros((iter_batch_size, 3, h, w))
+                    for b_idx in range(iter_batch_size):
+                        in_tensor[b_idx, :, :, :] = self._z_score_norm(in_imgs[img_idx + b_idx])
+
+                    gpu_status, gpu_idx_in_use = self._gpu_detector.get_current_gpu()
+                    if gpu_status:
+                        in_tensor = in_tensor.cuda(gpu_idx_in_use[0])
+                    out_tensor = self._model.forward(in_tensor)  # b,c,w,h c=2 if this is a GRAY IMAGE
+                    out_tensor = F.softmax(out_tensor, dim=1)
+                    if gpu_status:
+                        out_tensor = out_tensor.cpu()
+
+                    for b_idx in range(iter_batch_size):
+                        # the out data is presented by List again
+                        out_imgs.append(
+                            out_tensor[b_idx, :, :, :].numpy().transpose((1, 2, 0)))  # c, h, w => h, w, c
+                    img_idx = img_idx + iter_batch_size
+                    torch.cuda.empty_cache()
+            except RuntimeError as e:
+                raise e  # GPU or CPU memory is out of use
+            else:
+                out_imgs = tta.merge_out(out_imgs)  # merge different tta results.
+                for out_idx in range(len(out_imgs)):
+                    # transform type and post process
+                    out_imgs[out_idx] = np.argmax(out_imgs[out_idx], axis=2).astype(np.uint8)
+                out_img = overlap_tile.stitch(out_imgs)
+                if self._use_post_process:
+                    out_post = self.__post_process(out_img)
+                else:
+                    out_post = out_img
+        return out_img, out_post
 
     
     def forward_one_image(self, in_ori_img: np.ndarray) -> np.ndarray:
@@ -165,7 +277,7 @@ class NetInference:
         """
         assert self._load_status, "Please load parameters correctly"
         assert isinstance(in_ori_img, np.ndarray), "The input image must be numpy type"
-        assert in_ori_img.ndim == 2,  "The iput image should be gray scale"
+        assert in_ori_img.ndim == 2,  "The input image should be gray scale"
         assert isinstance(self._input_size, int) and self._input_size % 16 == 0, "The input size must be int and can be divided by 16"
         assert isinstance(self._overlap_size, int) and self._overlap_size > 0, "The overlap size must be int and greater than 0"
         assert self._input_size > (2 * self._overlap_size), "The input size {} must be greater than 2 times overlap size {}".format(self._input_size, self._overlap_size)
@@ -192,13 +304,15 @@ class NetInference:
                         # len(in_imgs) - img_idx
                         iter_batch_size = len(in_imgs) - img_idx
                     
-                    in_tensor = torch.zeros((iter_batch_size, 1, h, w))
+                    in_tensor = torch.zeros((iter_batch_size, 3, h, w))
                     for b_idx in range(iter_batch_size):
                         in_tensor[b_idx, :, :, :] = self._z_score_norm(in_imgs[img_idx + b_idx])
                     
                     gpu_status, gpu_idx_in_use =  self._gpu_detector.get_current_gpu()
                     if gpu_status:
-                        in_tensor = in_tensor.cuda(gpu_idx_in_use[0])                
+                        in_tensor = in_tensor.cuda(gpu_idx_in_use[0])
+
+
                     out_tensor = self._model.forward(in_tensor)  # b,c,w,h c=2
                     out_tensor = F.softmax(out_tensor, dim = 1)
                     if gpu_status:
@@ -241,14 +355,18 @@ class NetInference:
             Load model parameters
         """
         assert self._pth_address, "Please set pth address"
+        assert self._ddpm_pth, "Please set ddpm pth"
         gpu_status, _ =  self._gpu_detector.get_current_gpu()
         try:
             if gpu_status: # load gpu parameters for gpu
                 self._model.load_state_dict(torch.load(self._pth_address))
+                self._ddpm.load_state_dict(torch.load(self._ddpm_pth))
             else:          # load gpu parameters for cpu
                 self._model.load_state_dict({k.replace('module.',''): v for k,v in torch.load(self._pth_address).items()})
+                self._ddpm.load_state_dict({k.replace('module.',''): v for k,v in torch.load(self._ddpm_pth).items()})
         except FileNotFoundError as e:
             raise e
+
         
     def set_model(self, model):
         self._model = model

@@ -13,17 +13,22 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from accelerate import accelerator, Accelerator
+from ema_pytorch import EMA
 from torch.utils.data import DataLoader
 import torchvision.transforms as tr
 from sklearn.model_selection import KFold
 from skimage import morphology
 # import pandas as pd
+from torch.optim import Adam
 
 from utils import *
 
 from model.segtrainer import SegTrainer
 from model.seginferencer import SegInferencer
 from model.losses import losser
+
+from ddpm.denoising_diffusion_pytorch import Unet, GaussianDiffusion, Trainer
 
 
 # you can write your own func of data_preprocess begin at training
@@ -99,7 +104,7 @@ def data_postprocess(in_img: np.ndarray) -> np.ndarray:
     return in_img
 
 
-def train(data_name: str, data_bk_dir: Path, data_dir: Path, params_path: Path, custom_desc: str, pre_process: bool) -> str:
+def train(ddpm_model, data_name: str, data_bk_dir: Path, data_dir: Path, params_path: Path, custom_desc: str, pre_process: bool, accelerator) -> str:
     """
         Train netowrk
         :param data_name:
@@ -118,6 +123,25 @@ def train(data_name: str, data_bk_dir: Path, data_dir: Path, params_path: Path, 
         mean, std, num = data_preprocess(data_bk_dir, data_dir, suffix=params["data"]["imgs_suffix"],
                                          labels_class_num=params["data"]["labels_class_num"])
 
+
+    # ddpm training
+    ddpm = ddpm_model
+    ddpm_opt = Adam(ddpm.parameters(), lr=1e-4, betas=(0.9, 0.99))
+
+    # ddpm_path = r'/guocancheng/denoising-diffusion-pytorch/results_1222/model-best.pt' # predict v
+    # ddpm_path = r'/guocancheng/denoising-diffusion-pytorch/results_0105/model-best.pt'  # predict x0
+    # data = torch.load(ddpm_path, map_location=accelerator.device)
+    # ddpm_opt.load_state_dict(data['opt'])
+    # if accelerator.is_main_process:
+    #     ddpm_ema = EMA(ddpm, beta=0.995, update_every=4)
+    #     ddpm_ema.to(accelerator.device)
+    #     ddpm_ema.load_state_dict(data["ema"])
+    # else:
+    #     ddpm_ema = None
+    # ddpm.load_state_dict(data['model'])
+    # del data
+
+
     # you can direct assign values in here in order to avoid repeat execution of data_preprocess
     # for isibi2012, mean = 0.49475772084753505, std = 0.1678160259016179 and image num = 30
     params["data"]["name"] = data_name
@@ -132,22 +156,38 @@ def train(data_name: str, data_bk_dir: Path, data_dir: Path, params_path: Path, 
     experiment_dir.mkdir(parents=True, exist_ok=True)
     print("Parameters will be saved in {}".format(str(experiment_dir)))
 
-    seg_trainer = SegTrainer(params, experiment_dir, data_postprocess)
+    seg_trainer = SegTrainer(params, experiment_dir, data_postprocess, ddpm, ddpm_opt, accelerator)
 
     # Training
     seg_trainer.start_training()
 
     return experiment_name
 
+def build_ddpm():
+    unet = Unet(
+        dim=128,
+        dim_mults=(1, 2, 4, 8),
+        flash_attn=False
+    )
 
-def inference(experiment_name: str) -> None:
+    ddpm = GaussianDiffusion(
+        unet,
+        image_size=256,
+        timesteps=1000,  # number of steps
+        sampling_timesteps=250,
+        # number of sampling timesteps (using ddim for faster inference [see citation for ddim paper])
+        objective='pred_x0'
+    )
+    return ddpm
+
+def inference(ddpm_model, experiment_name: str, accelerator) -> None:
     """
         inference data according to previous training record
         :param experiment_name: which is used to record all the parameter in training
     """
     # Wether to analyse all data or only test dataset
     is_test_all = True
-    seg_trainer = SegInferencer(experiment_name, is_test_all, data_postprocess)
+    seg_trainer = SegInferencer(ddpm_model, experiment_name, accelerator, is_test_all, data_postprocess)
     seg_trainer.start_inference()
 
 
@@ -156,11 +196,17 @@ if __name__ == '__main__':
     data_bk_dir = Path("../dualData", data_name, "raw/train")
     data_dir = Path(Path.cwd(), "data", data_name, "train")
     params_path = Path(Path.cwd(), "alla_bcw.yml")
-    custom_desc = "just_seg"  # you can add your description in here
+    custom_desc = "ddpm_seg_0112_1822"  # you can add your description in here
 
     # Tranining
-    experiment_name = train(data_name, data_bk_dir, data_dir, params_path, custom_desc, False)
+    accelerator = Accelerator(
+        split_batches=True,
+        mixed_precision='no'
+    )
+
+    ddpm_model = build_ddpm()
+    experiment_name = train(ddpm_model, data_name, data_bk_dir, data_dir, params_path, custom_desc, False, accelerator)
 
     # Inference
-    # experiment_name = "seg_alla_unet_loss_bcw_val_dice"
-    inference(experiment_name)
+    # experiment_name = "seg_alla_unet_loss_bcw_ddpm_seg_0112_1822"
+    inference(ddpm_model, experiment_name, accelerator)

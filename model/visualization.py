@@ -5,8 +5,8 @@ from IPython.display import clear_output
 from utils import *
 
 # visualization
-def vis_result(img: np.ndarray, label: np.ndarray, output: np.ndarray, result_dir: Path, 
-               logger: Logger, weight: np.ndarray = None, epoch: int = None, description="val_", show_mask = False) -> None: 
+def vis_result(img: np.ndarray, label: np.ndarray, pred_x0: np.ndarray, output: np.ndarray, result_dir: Path,
+               logger: Logger, weight: np.ndarray = None, epoch: int = None, description="val_", show_mask = False, isTrain = False) -> None:
     """
         Check visualization of result during training
         :param img:         the raw image      
@@ -18,6 +18,10 @@ def vis_result(img: np.ndarray, label: np.ndarray, output: np.ndarray, result_di
         :param epoch:       the epoch index in the training
         :param description: the other description add before in the name of result
         :param show_mask:   wether to show label or output as mask in img
+
+    Parameters
+    ----------
+    pred_x0
     """
     logger.log_print("Image size is {},    min is {}, max is {}".format(img.shape, np.amin(img), np.amax(img)))
     logger.log_print("Label size is {},    min is {}, max is {}".format(label.shape, np.amin(label), np.amax(label)))
@@ -29,23 +33,28 @@ def vis_result(img: np.ndarray, label: np.ndarray, output: np.ndarray, result_di
                                                                             np.amin(weight[:, :, 1]), np.amax(weight[:, :, 1])))
         
     
-    plt.figure(figsize=(20, 20))
-    column_num = 3
+    plt.figure(figsize=(40, 40))
+    column_num = 4
     if weight is not None:
-        column_num = 5
-    # plt.subplot(1, column_num, 1), plt.imshow(img, cmap="gray"), plt.title("img"), plt.axis("off")
+        column_num = 6
+    if isTrain:
+        img = img.transpose(1, 2, 0)
+    plt.subplot(1, column_num, 1), plt.imshow(img, cmap="gray"), plt.title("img"), plt.axis("off")
     if show_mask:
         label  = add_mask(label, img)
         output = add_mask(output, img)
+        pred_x0 = add_mask(pred_x0, img)
         plt.subplot(1, column_num, 2), plt.imshow(label.astype(np.uint8)),  plt.title("label"),  plt.axis("off")
-        plt.subplot(1, column_num, 3), plt.imshow(output.astype(np.uint8)), plt.title("output"), plt.axis("off")       
+        plt.subplot(1, column_num, 3), plt.imshow(pred_x0.astype(np.uint8)),  plt.title("pred_x0"), plt.axis("off")
+        plt.subplot(1, column_num, 4), plt.imshow(output.astype(np.uint8)), plt.title("output"), plt.axis("off")
     else:       
         plt.subplot(1, column_num, 2), plt.imshow(label,  cmap="gray"), plt.title("label"), plt.axis("off")
-        plt.subplot(1, column_num, 3), plt.imshow(output, cmap="gray"), plt.title("output"), plt.axis("off")
+        plt.subplot(1, column_num, 3), plt.imshow(label.astype(np.uint8)), plt.title("pred_x0"), plt.axis("off")
+        plt.subplot(1, column_num, 4), plt.imshow(output, cmap="gray"), plt.title("output"), plt.axis("off")
     
     if weight is not None:
-        plt.subplot(1, column_num, 4), plt.imshow(weight[:, :, 0], cmap="plasma"), plt.title("weight-0"), plt.axis("off")
-        plt.subplot(1, column_num, 5), plt.imshow(weight[:, :, 1], cmap="plasma"), plt.title("weight-1"), plt.axis("off")
+        plt.subplot(1, column_num, 5), plt.imshow(weight[:, :, 0], cmap="plasma"), plt.title("weight-0"), plt.axis("off")
+        plt.subplot(1, column_num, 6), plt.imshow(weight[:, :, 1], cmap="plasma"), plt.title("weight-1"), plt.axis("off")
     if epoch:
         plt.savefig(str(Path(result_dir, description + str(epoch).zfill(3) + "_result.png")))
     else:
